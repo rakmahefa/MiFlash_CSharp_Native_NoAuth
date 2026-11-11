@@ -31,13 +31,13 @@
 
 ## M2 — Transport USB (libusb) + détection
 
-- [ ] M2.1 Intégrer LibUsbDotNet ; énumération des 9008 (VID `05c6:9008`) + appareils fastboot (VIDs `2717`, `18d1`, `05c6`, `8087`, `0955`, `31ef` ; produit `android`/`fastboot` ; fabricant `xiaomi inc`)
-- [ ] M2.2 `UsbTransport : ITransport` : claim interface, bulk IN/OUT, ZLP (`ZlpAwareHost="1"`), timeouts, discard buffers
-- [ ] M2.3 Index appareil = (bus, port physique) — remplace `rundll32 qcCoInstaller` et parsing hub MiUSB
-- [ ] M2.4 Hotplug insert/remove (libusb ou udev monitor) — remplace `ManagementEventWatcher`
-- [ ] M2.5 `MiFlash.Transport.Serial` fallback (`qcserial` → `/dev/ttyUSB*`) via `System.IO.Ports`
-- [ ] M2.6 Règles udev (`51-miflash.rules` : 05c6:9008 + 2717/18d1 fastboot, `MODE="0660"`, `TAG+="uaccess"`) + doc installation
-- [ ] M2.7 Test matériel : HELLO reçu + programmer téléversé sur un 9008 réel
+- [x] M2.1 Intégrer LibUsbDotNet 3.0.224 ; énumération des 9008 (VID `05c6:9008`) + appareils fastboot (VIDs `2717`, `18d1`, `05c6`, `8087`, `0955`, `31ef` ; produit `android`/`fastboot`/`intel android ad` ; fabricant `xiaomi inc`) — `UsbDeviceEnumerator` + `DeviceFilter` (logique fidèle à `UsbDevice.GetAndroidDevices` l.248, Manufacturer non nul requis)
+- [x] M2.2 `UsbTransport : ITransport` : claim interface 0, découverte auto des endpoints bulk IN/OUT, ZLP (`NeedsZeroLengthPacket`), timeouts, `DiscardBuffers` (ReadFlush + tampon interne émulant `BytesToRead`)
+- [x] M2.3 Index appareil = (bus, port physique) via `UsbDeviceIdentity.Location` — remplace `rundll32 qcCoInstaller` et parsing hub MiUSB
+- [x] M2.4 Hotplug insert/remove — `UsbDeviceWatcher` (polling 1 s + diff ; hotplug natif libusb prévu au durcissement M6)
+- [x] M2.5 `MiFlash.Transport.Serial` fallback (`qcserial` → `/dev/ttyUSB*`) via `System.IO.Ports` — `SerialTransport`
+- [x] M2.6 Règles udev (`packaging/udev/51-miflash.rules` : 05c6:9008 + 2717/18d1/05c6/8087/0955/31ef, `MODE="0660"`, `TAG+="uaccess"`) + doc installation dans le fichier
+- [ ] M2.7 Test matériel : HELLO reçu + programmer téléversé sur un 9008 réel — **en attente de matériel** (appareil de la matrice README requis)
 
 ## M3 — Moteur EDL complet
 

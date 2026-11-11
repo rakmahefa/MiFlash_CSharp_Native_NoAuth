@@ -118,7 +118,7 @@ public class Comm
                 result = new byte[bytesToRead];
                 try
                 {
-                    transport.Read(result, 0, bytesToRead);
+                    received_count += transport.Read(result, 0, bytesToRead);
                     return result;
                 }
                 catch (TimeoutException ex)

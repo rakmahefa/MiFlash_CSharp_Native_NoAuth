@@ -1,0 +1,18 @@
+# MiFlash Linux — règles udev (M2.6)
+# Accès sans root aux appareils Xiaomi/Qualcomm.
+# Installation :
+#   sudo cp packaging/udev/51-miflash.rules /usr/lib/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+# puis rebrancher l'appareil (ou : udevadm trigger --action=add).
+
+# Qualcomm HS-USB QDLoader 9008 (mode EDL) — cible principale de MiFlash.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="05c6", ATTRS{idProduct}=="9008", MODE="0660", TAG+="uaccess"
+
+# Fastboot / adb — Xiaomi (2717), Google (18d1), Qualcomm (05c6),
+# Intel (8087 : "intel android ad"), Nvidia (0955), Spreadtrum (31ef).
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2717", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="18d1", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="05c6", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="8087", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0955", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="31ef", MODE="0660", TAG+="uaccess"
