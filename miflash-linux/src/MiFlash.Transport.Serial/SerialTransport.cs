@@ -62,6 +62,12 @@ public sealed class SerialTransport : ITransport
         }
     }
 
+    /// <summary>Pas d'équivalent matériel sur un tty : no-op volontaire
+    /// (la récupération Sahara HELLO est une spécificité USB 9008).</summary>
+    public void ResetPort()
+    {
+    }
+
     public int Read(byte[] buffer, int offset, int count) => _port.Read(buffer, offset, count);
 
     public void Write(byte[] buffer, int offset, int count) => _port.Write(buffer, offset, count);

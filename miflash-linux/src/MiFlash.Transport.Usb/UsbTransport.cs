@@ -21,8 +21,15 @@ public sealed class UsbTransport : ITransport
     private UsbEndpointReader _reader;
     private UsbEndpointWriter _writer;
     private readonly Queue<byte> _pending = new Queue<byte>();
+    private readonly byte[] _drainScratch = new byte[64 * 1024];
     private int _outMaxPacketSize = 512;
     private bool _disposed;
+
+    /// <summary>Timeout du peek non bloquant de <see cref="BytesToRead"/> (ms).
+    /// NB : 0 ne signifie PAS « non bloquant » pour libusb mais « illimité » : un
+    /// <c>Read(…, 0, …)</c> bloque indéfiniment si aucune donnée n'arrive (bug
+    /// POCO F3 v1.0.1 — le HELLO consommé par qcserial ne revient jamais).</summary>
+    private const int PeekTimeoutMs = 5;
 
     /// <summary>
     /// Émet un paquet de longueur nulle après une écriture multiple de la taille
@@ -38,13 +45,13 @@ public sealed class UsbTransport : ITransport
 
     public bool IsOpen => _device.IsOpen;
 
-    /// <summary>Nombre d'octets immédiatement disponibles (drain non bloquant).</summary>
+    /// <summary>Nombre d'octets immédiatement disponibles (peek quasi non bloquant).</summary>
     public int BytesToRead
     {
         get
         {
             ThrowIfNotOpen();
-            DrainPending(timeout: 0);
+            DrainPending(PeekTimeoutMs);
             return _pending.Count;
         }
     }
@@ -141,6 +148,29 @@ public sealed class UsbTransport : ITransport
         _reader?.ReadFlush();
     }
 
+    /// <summary>
+    /// Reset du port USB (libusb_reset_device / USBDEVFS_RESET) — fix POCO F3
+    /// (v1.0.2). Le PBL relance Sahara et renvoie un HELLO frais après
+    /// ré-énumération. Le claim est rétabli (l'auto-detach éjecte un éventuel
+    /// driver noyau rebondi pendant le reset) et les endpoints redécouverts,
+    /// les anciens handles pouvant être invalidés.
+    /// </summary>
+    public void ResetPort()
+    {
+        ThrowIfNotOpen();
+        _device.ResetDevice();
+        _reader = null;
+        _writer = null;
+        _pending.Clear();
+        if (!_device.ClaimInterface(_interfaceNumber))
+        {
+            throw new InvalidOperationException(
+                $"Impossible de re-claimer l'interface {_interfaceNumber} après reset USB de " +
+                $"{_device.VendorId:X4}:{_device.ProductId:X4} (driver noyau rebondi ?).");
+        }
+        DiscoverEndpoints();
+    }
+
     public int Read(byte[] buffer, int offset, int count)
     {
         ThrowIfNotOpen();
@@ -183,24 +213,25 @@ public sealed class UsbTransport : ITransport
     public static bool NeedsZeroLengthPacket(int count, int maxPacketSize)
         => count > 0 && maxPacketSize > 0 && count % maxPacketSize == 0;
 
-    /// <summary>Lit ce qui est disponible sans bloquer (timeout=0) et l'accumule dans le tampon.</summary>
+    /// <summary>Lit ce qui est disponible sans bloquer longuement et l'accumule
+    /// dans le tampon. Un timeout ≤ 0 est clampé à <see cref="PeekTimeoutMs"/>
+    /// (0 = « illimité » côté libusb, cf. remarque sur BytesToRead).</summary>
     private void DrainPending(int timeout)
     {
-        var scratch = new byte[64 * 1024];
-        while (_pending.Count < scratch.Length)
+        if (timeout < 1)
         {
-            Error error = _reader.Read(scratch, timeout, out int read);
+            timeout = PeekTimeoutMs;
+        }
+        while (_pending.Count < _drainScratch.Length)
+        {
+            Error error = _reader.Read(_drainScratch, timeout, out int read);
             if (error == Error.Success && read > 0)
             {
                 for (int i = 0; i < read; i++)
                 {
-                    _pending.Enqueue(scratch[i]);
+                    _pending.Enqueue(_drainScratch[i]);
                 }
-                if (timeout == 0 && read < scratch.Length)
-                {
-                    return; // plus rien d'immédiatement disponible
-                }
-                if (read == scratch.Length)
+                if (read == _drainScratch.Length)
                 {
                     continue; // tampon plein : continuer à drainer
                 }

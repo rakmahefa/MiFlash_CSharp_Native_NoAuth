@@ -7,11 +7,22 @@
 
 ## 1. Prérequis
 
-- **miflash-linux v1.0.0+** installé ([README-linux § Installation](../README-linux.md)) :
+- **miflash-linux v1.0.2+** installé ([README-linux § Installation](../README-linux.md)) :
 
   ```bash
-  sudo apt install ./miflash-linux_1.0.0_amd64.deb   # ou tarball + udev à la main
+  sudo apt install ./miflash-linux_1.0.2_amd64.deb   # ou tarball + udev à la main
   miflash doctor        # libusb OK, udev OK — tout doit être OK/WARN, aucun FAIL
+  ```
+
+- **Si vous aviez déjà installé les règles udev d'une version antérieure à la
+  v1.0.2**, mettez-les à jour (elles détachent désormais qcserial/qcaux du
+  9008 et ignorent ModemManager — sans cela, le driver noyau consomme le
+  paquet HELLO Sahara avant miflash) :
+
+  ```bash
+  sudo cp packaging/udev/51-miflash.rules /etc/udev/rules.d/
+  sudo udevadm control --reload-rules
+  # débranchez/rebranchez le téléphone (ou : sudo udevadm trigger --action=add)
   ```
 
 - **ROM fastboot officielle** Xiaomi du POCO F3 (archive `..._images_...tgz`
@@ -129,7 +140,8 @@ Le moteur natif parse `flash_all*.sh|.bat` (aucun script externe exécuté).
 |---|---|
 | `can not found programmer file` | le `.elf` n'est pas dans le dossier `images/` (la recherche est **non récursive**) |
 | Pas de ACK après `<configure>` / échec DDR | mauvaise génération DDR → mettez `prog_ufs_firehose_sm8250_ddr_4.elf` **et** `_ddr_5.elf` dans le dossier, relancez (l'auto-détection tranche) |
-| `HELLO` jamais reçu | appareil sorti du 9008, câble de charge, permissions udev → `miflash doctor`, rebrancher |
+| `cannot receive hello packet` puis `reset USB port - forcing fresh Sahara HELLO` | **récupération automatique v1.0.2** : le driver noyau (qcserial) avait consommé le HELLO ; miflash resette le port USB et le PBL renvoie un HELLO frais — si le message tourne en boucle 10 fois puis échoue, mettez à jour les règles udev (§1), rebranchez, puis `miflash doctor` |
+| `HELLO` jamais reçu, aucun message de reset | appareil sorti du 9008, câble de charge, permissions udev → `miflash doctor`, rebrancher |
 | Échec en cours de flash | ne pas débrancher : l'appareil reste en 9008, relancer `miflash flash` suffit |
 | Téléphone en bootloop après | premier démarrage long (10 min max) ; sinon reflash, ou version ROM plus récente (ARB) |
 

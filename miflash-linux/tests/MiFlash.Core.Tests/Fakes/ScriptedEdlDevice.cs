@@ -26,9 +26,18 @@ public class ScriptedEdlDevice : ITransport
     private readonly int _programmerChunkSize;
     private bool _awaitingAuthBlob;
     private bool _armHelloOnOpen;
+    private bool _awaitingSwitchMode;
 
     /// <summary>Taille du programmer attendu (l'appareil la connaît par le flux READ DATA).</summary>
     public int ProgrammerSize { get; set; } = 8192;
+
+    /// <summary>Nombre de reset USB (<see cref="ResetPort"/>) reçus de l'hôte.</summary>
+    public int ResetPortCount { get; private set; }
+
+    /// <summary>Vrai → comportement PBL après USBDEVFS_RESET : Sahara relancé,
+    /// HELLO frais renvoyé à chaque reset (scénario qcserial a mangé le HELLO
+    /// initial, fix v1.0.2).</summary>
+    public bool ResendHelloOnReset { get; set; }
 
     /// <summary>Pattern renvoyé au peek CPUID : DDR4 ou DDR5.</summary>
     public string PeekResponse { get; set; } = "0xC3 0x00 0x40 0x10 ";
@@ -86,6 +95,21 @@ public class ScriptedEdlDevice : ITransport
 
     public void DiscardBuffers() => _toHost.Clear();
 
+    /// <summary>Reset USB vu par la cible : comme un PBL réel, l'appareil
+    /// relance sa machine d'état Sahara (phase Idle) et renvoie un HELLO
+    /// frais si <see cref="ResendHelloOnReset"/> est armé.</summary>
+    public void ResetPort()
+    {
+        ResetPortCount++;
+        if (ResendHelloOnReset)
+        {
+            _phase = Phase.Idle;
+            _awaitingAuthBlob = false;
+            _awaitingSwitchMode = false;
+            EnqueueHello();
+        }
+    }
+
     public virtual int Read(byte[] buffer, int offset, int count)
     {
         int n = 0;
@@ -119,9 +143,27 @@ public class ScriptedEdlDevice : ITransport
         }
         if (_phase == Phase.Idle && command == SaharaCommand.SAHARA_HELLO_RESPONSE && count >= 48)
         {
+            // sahara_hello_response.Mode (offset 20) : 0 = chemin nominal
+            // (transfert d'image → READ DATA) ; 3 = « switch mode back » de la
+            // récupération → le PBL passe en COMMAND mode et attend le
+            // SWITCH_MODE qui suit (il renverra alors un HELLO frais).
+            uint responseMode = BitConverter.ToUInt32(chunk, 20);
+            if (responseMode == 3)
+            {
+                _awaitingSwitchMode = true;
+                return;
+            }
             _phase = Phase.ReadData;
             _received = 0;
             EnqueueReadData();
+            return;
+        }
+        if (_awaitingSwitchMode && command == SaharaCommand.SAHARA_SWITCH_MODE_PACKET && count == 12)
+        {
+            // SWITCH_MODE → le PBL relance le protocole dans le nouveau mode.
+            _awaitingSwitchMode = false;
+            _phase = Phase.Idle;
+            EnqueueHello();
             return;
         }
         if (_awaitingAuthBlob)

@@ -33,6 +33,15 @@ public interface ITransport : IDisposable
     /// <summary>Purge les tampons IN et OUT (équivalent DiscardInBuffer + DiscardOutBuffer).</summary>
     void DiscardBuffers();
 
+    /// <summary>
+    /// Reset matériel du port (M6.6, fix POCO F3). Sur le 9008 : USBDEVFS_RESET
+    /// via libusb — le PBL relance sa machine d'état Sahara et renvoie un HELLO
+    /// frais. C'est la récupération quand le HELLO initial a été consommé par un
+    /// driver noyau (qcserial/qcaux) lié à l'interface avant le claim libusb.
+    /// No-op sur les transports sans équivalent matériel (série, faux de test).
+    /// </summary>
+    void ResetPort();
+
     /// <summary>Lit <paramref name="count"/> octets (bloquant jusqu'au timeout).</summary>
     int Read(byte[] buffer, int offset, int count);
 

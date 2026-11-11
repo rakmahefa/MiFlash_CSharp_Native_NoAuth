@@ -36,6 +36,11 @@ public sealed class FakeTransport : ITransport
 
     public void DiscardBuffers() => _readQueue.Clear();
 
+    /// <summary>No-op (transport de test sans matériel).</summary>
+    public void ResetPort()
+    {
+    }
+
     public int Read(byte[] buffer, int offset, int count)
     {
         byte[] chunk = _readQueue.Dequeue();

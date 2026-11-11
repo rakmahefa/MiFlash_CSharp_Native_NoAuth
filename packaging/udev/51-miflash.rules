@@ -8,6 +8,20 @@
 # Qualcomm HS-USB QDLoader 9008 (mode EDL) — cible principale de MiFlash.
 SUBSYSTEM=="usb", ATTRS{idVendor}=="05c6", ATTRS{idProduct}=="9008", MODE="0660", TAG+="uaccess"
 
+# Fix v1.0.2 (POCO F3 / alioth) : les drivers série du noyau (qcserial, qcaux,
+# usb_wwan, option…) qui bindent l'interface 9008 consomment le paquet HELLO
+# Sahara avant que libusb puisse le lire — SetAutoDetachKernelDriver arrive
+# trop tard. On les détache immédiatement ; miflash garde en secours la
+# récupération par reset USB (USBDEVFS_RESET) dans la boucle HELLO.
+ACTION=="add|bind", SUBSYSTEM=="usb", DEVTYPE=="usb_interface", \
+  ATTRS{idVendor}=="05c6", ATTRS{idProduct}=="9008", \
+  ENV{DRIVER}=="qcserial|qcaux|usb_wwan|option|sierra", \
+  RUN+="/bin/sh -c 'echo %k > /sys/bus/usb/drivers/$env{DRIVER}/unbind'"
+
+# ModemManager ne doit pas sonder le port EDL : ses sondes AT sur le tty
+# créé par qcserial perturbent la session Sahara.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="05c6", ATTRS{idProduct}=="9008", ENV{ID_MM_DEVICE_IGNORE}="1"
+
 # Fastboot / adb — Xiaomi (2717), Google (18d1), Qualcomm (05c6),
 # Intel (8087 : "intel android ad"), Nvidia (0955), Spreadtrum (31ef).
 SUBSYSTEM=="usb", ATTRS{idVendor}=="2717", MODE="0660", TAG+="uaccess"

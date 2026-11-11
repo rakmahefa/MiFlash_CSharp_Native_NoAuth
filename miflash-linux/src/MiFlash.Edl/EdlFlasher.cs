@@ -458,6 +458,23 @@ public sealed class EdlFlasher
                 Log.w(comm.PortName, "port ferme, tentative de reouverture");
                 comm.transport.Open();
             }
+            // Fix POCO F3 / alioth (v1.0.2) : sous Linux, qcserial/qcaux peut
+            // binder l'interface 9008 et consommer le HELLO Sahara AVANT le
+            // claim libusb — SetAutoDetachKernelDriver arrive trop tard et le
+            // « switch mode back » seul ne fait rien revenir. Un reset du port
+            // USB (USBDEVFS_RESET) force le PBL à relancer Sahara et à renvoyer
+            // un HELLO frais ; le transport rétablit claim + endpoints.
+            msg = "reset USB port - forcing fresh Sahara HELLO";
+            Log.w(comm.PortName, msg);
+            FlashStatus.UpdateDeviceStatus(comm.PortName, 0f, msg, "flashing", isDone: false);
+            try
+            {
+                comm.transport.ResetPort();
+            }
+            catch (Exception ex)
+            {
+                Log.w(comm.PortName, "reset USB port failed: " + ex.Message);
+            }
             if (comm.IsOpen)
             {
                 Log.w(comm.PortName, "nettoyage des tampons, envoi SAHARA_SWITCH_MODE_PACKET");

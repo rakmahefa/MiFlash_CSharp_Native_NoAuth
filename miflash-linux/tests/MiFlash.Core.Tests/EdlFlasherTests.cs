@@ -186,6 +186,42 @@ public class EdlFlasherTests : IDisposable
     }
 
     [Fact]
+    public void Sahara_recovers_from_consumed_hello_via_usb_port_reset()
+    {
+        // Régression v1.0.2 (retour matériel POCO F3) : sous Linux, qcserial ou
+        // qcaux peut binder l'interface 9008 et consommer le HELLO Sahara
+        // initial AVANT le claim libusb — plus aucune donnée n'arrive jamais
+        // et la lecture bloquait indéfiniment (peek « timeout 0 » = illimité
+        // côté libusb). La boucle de récupération doit resetter le port USB :
+        // le PBL relance Sahara, renvoie un HELLO frais, et le téléversement
+        // du programmer se poursuit normalement.
+        byte[] programmer = File.ReadAllBytes(CreateImage("prog_ufs_firehose_sm8250_ddr_4.elf", 8192, 0x7F));
+        (EdlFlasher flasher, ScriptedEdlDevice device) = CreateFlasher();
+        device.ResendHelloOnReset = true;
+        device.DiscardBuffers(); // HELLO initial consommé par le driver noyau
+
+        flasher.SaharaDownloadProgrammer(FirehoseCommands.PROGRAMMER_DDR4);
+
+        // Un reset USB a été demandé pendant la récupération.
+        Assert.Equal(1, device.ResetPortCount);
+        Assert.Contains(_statusLog, s => s.Contains("reset USB port"));
+        Assert.Contains(_statusLog, s => s.Contains("received hello packet"));
+
+        // Séquence de récupération : HELLO RESPONSE mode 3 (« switch mode
+        // back ») puis SWITCH_MODE, avant le HELLO RESPONSE nominal (mode 0).
+        Assert.Equal(2u, BitConverter.ToUInt32(device.HostWrites[0], 0));
+        Assert.Equal(3u, BitConverter.ToUInt32(device.HostWrites[0], 20));
+        Assert.Equal(12u, BitConverter.ToUInt32(device.HostWrites[1], 0));
+        Assert.Equal(2u, BitConverter.ToUInt32(device.HostWrites[2], 0));
+        Assert.Equal(0u, BitConverter.ToUInt32(device.HostWrites[2], 20));
+
+        // Le programmer complet a été téléversé après la récupération.
+        byte[] transferred = device.HostWrites.Where(w => w.Length == 4096).SelectMany(w => w).ToArray();
+        Assert.Equal(programmer, transferred);
+        Assert.Contains(_statusLog, s => s.Contains("transferred successfully"));
+    }
+
+    [Fact]
     public void DlAuth_sends_authp_then_256_byte_blob()
     {
         var device = new ScriptedEdlDevice();
