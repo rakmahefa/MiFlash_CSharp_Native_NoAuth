@@ -1,0 +1,18 @@
+<Project>
+  <!-- Propriétés communes à toute la solution miflash-linux (M0.3).
+       Référentiel : spec-linux.md §4, plan.md M0. -->
+  <PropertyGroup>
+    <LangVersion>12</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- v0.1 : fidélité du portage d'abord ; activation de nullable planifiée
+         au durcissement (todo.md M6.5). -->
+    <Nullable>disable</Nullable>
+    <Version>0.1.0</Version>
+    <Authors>rakmahefa</Authors>
+    <Product>MiFlash Linux</Product>
+    <Description>Portage natif Linux de MiFlash (EDL Qualcomm 9008, NoAuth) — usage éducatif uniquement</Description>
+    <RepositoryUrl>https://github.com/rakmahefa/MiFlash_CSharp_Native_NoAuth</RepositoryUrl>
+    <NeutralLanguage>fr</NeutralLanguage>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+</Project>
