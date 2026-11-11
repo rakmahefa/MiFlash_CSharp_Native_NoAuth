@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\MiFlash.Transport.Serial\MiFlash.Transport.Serial.csproj" />
     <ProjectReference Include="..\..\src\MiFlash.Edl\MiFlash.Edl.csproj" />
     <ProjectReference Include="..\..\src\MiFlash.Fastboot\MiFlash.Fastboot.csproj" />
+    <ProjectReference Include="..\..\src\MiFlash.Cli\MiFlash.Cli.csproj" />
   </ItemGroup>
 
 </Project>

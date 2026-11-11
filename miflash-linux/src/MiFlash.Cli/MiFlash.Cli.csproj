@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\MiFlash.Core\MiFlash.Core.csproj" />
@@ -6,6 +6,15 @@
     <ProjectReference Include="..\MiFlash.Fastboot\MiFlash.Fastboot.csproj" />
     <ProjectReference Include="..\MiFlash.Transport.Usb\MiFlash.Transport.Usb.csproj" />
     <ProjectReference Include="..\MiFlash.Transport.Serial\MiFlash.Transport.Serial.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="i18n/LanguageLibrary.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" Version="2.0.0" />
+    <PackageReference Include="Spectre.Console" Version="0.49.1" />
   </ItemGroup>
 
   <PropertyGroup>

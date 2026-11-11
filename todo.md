@@ -64,13 +64,14 @@
 
 ## M4 — CLI
 
-- [ ] M4.1 Squelette `miflash` (System.CommandLine + Spectre.Console) : `devices|flash|backup|restore|provision|reboot|doctor|version`
-- [ ] M4.2 `miflash devices [--json] [--watch]` (RF-1/RF-2)
-- [ ] M4.3 `miflash flash <dir> [--programmer <f>] [--device <sn>] [--read-dump] [--write-dump]` (RF-3→RF-11)
-- [ ] M4.4 Confirmations erase/program (`--yes`), avertissement usage éducatif
-- [ ] M4.5 Logs par appareil `~/.local/state/miflash/log/` + log résultat global (port `Log.cs`)
-- [ ] M4.6 i18n : port `LanguageProvider` + `LanguageLibrary.xml` (fr/en/zh)
-- [ ] M4.7 `miflash doctor` : libusb, udev, permissions, fastboot présent, .NET OK
+- [x] M4.1 Squelette `miflash` (System.CommandLine **2.0.0 GA** + Spectre.Console 0.49.1) : `devices|flash|backup|restore|provision|reboot|doctor|version` — `MiFlash.Cli/Program.cs` + `Commands/` (une classe par commande), codes de sortie 0/1/2/3/4 ; `EdlOperation` (Flash/Backup/Restore/Provision/Reboot/RebootToEdl) ajouté à `MultiDeviceFlasher` + `EdlFlasher.BeginSession()/BackupOnly()/RestoreOnly()/ProvisionOnly()/Reboot()` — toutes les opérations passent par le runner parallèle M3.9
+- [x] M4.2 `miflash devices [--json] [--watch]` (RF-1/RF-2) — table Spectre (kind/usb/location/serial/product), JSON camelCase, watch = `UsbDeviceWatcher` + événements `[+] arrivé / [-] retiré` (Ctrl+C)
+- [x] M4.3 `miflash flash <dir> [--programmer auto|lite|ddr4|ddr5] [--device bus.port|sn]… [--serial /dev/ttyUSB*] [--read-dump] [--write-dump] [--backup-dir] [--quiet]` (RF-3→RF-11) — `EdlTargets` (résolution `--device` par Location/bus.port/serial, défaut tous les 9008), `EdlRun` (pipeline cibles → jobs → MultiDeviceFlasher → résultats), statuts Spectre via `ConsoleReporter` (`IFlashStatusReporter`), dump = `Comm.isReadDump/isWriteDump`
+- [x] M4.4 Confirmations erase/program (`--yes`), avertissement usage éducatif — flash/restore/provision destructifs : avertissement i18n + cibles + saisie « yes » ; stdin non terminal sans `--yes` → refus (scripts explicites) ; backup/reboot non destructifs sans confirmation
+- [x] M4.5 Logs par appareil `~/.local/state/miflash/log/` + log résultat global (port `Log.cs`) — `SessionLog` branché sur `Log.Sink` : `<device>@<yyyyMMdd-HHmmss>.txt`, déplacement `<yyyyMd>/pass|fail/` (port de `moveLog`), `result.log` global (PASS/FAIL/device/détail)
+- [x] M4.6 i18n : port `LanguageProvider` + `LanguageLibrary.xml` (fr/en/zh) — bibliothèque embarquée (EmbeddedResource) surchargeable dans `~/.config/miflash/`, colonnes ENG/FRE/CHN_S(+CHN_T), repli langue→ENG→clé (l'original renvoyait vide), cache (l'original relisait le XML à chaque appel), `Detect()` depuis LC_ALL/LANG, option globale `--lang`, façade `L._()`
+- [x] M4.7 `miflash doctor` : libusb, udev, permissions, fastboot présent, .NET OK — `DoctorService` : runtime (+ détection self-contained), contexte libusb + énumération, règles udev (51-miflash.rules, commande d'installation affichée), `fastboot` sur PATH (pré-requis M5), répertoires XDG créés ; WARN n'échoue pas, FAIL → exit 4
+- [x] M4.8 Tests : **108 verts** (+16) — opérations standalone via `MultiDeviceFlasher` sur `ScriptedEdlDevice` (backup lit persist.img, restore écrit depuis `--from`, provision renvoie `<ufs>` sans `desc` + re-configure `SkipStorageInit="0"`, reboot partial_reset, reboot --edl reset_to_edl, backup sans XML échoue proprement), `LanguageProvider` (3 langues embarquées, repli CHN_T→ENG, clé inconnue, `Detect()`, surcharge XDG), `SessionLog` (fichier par appareil, pass/fail + result.log, Sanitize) ; publish self-contained linux-x64 testé (binaire `doctor`/`version` OK)
 
 ## M5 — Fastboot
 

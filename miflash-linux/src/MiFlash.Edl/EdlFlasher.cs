@@ -126,19 +126,9 @@ public sealed class EdlFlasher
                 break;
             }
         }
-        if (NeedProvision(swPath))
-        {
-            m_iSkipStorageInit = 1;
-        }
-        startTime = DateTime.Now;
         try
         {
-            comm.StartReading();
-            SaharaDownloadProgrammer(programmerName);
-            comm.StopReading();
-            Thread.Sleep(TIME_WAIT_FIREHOSE_START);
-            Ping();
-            ConfigureDDR(comm.intSectorSize, BUFFER_SECTORS, storageType, m_iSkipStorageInit);
+            BeginSession();
 
             // Peek CPUID : si les deux programmers DDR existent et qu'aucune
             // génération n'est encore détectée, interroger la cible puis
@@ -250,6 +240,165 @@ public sealed class EdlFlasher
     }
 
     // ------------------------------------------------------------- Sahara ----
+
+    /// <summary>
+    /// Préliminaire commun de toutes les opérations (extrait de Flash l.129–141,
+    /// exposé pour le CLI M4) : provision détecté → skipStorageInit=1, puis
+    /// StartReading → Sahara → StopReading → attente firehose → ping → configure.
+    /// </summary>
+    public void BeginSession()
+    {
+        if (NeedProvision(swPath))
+        {
+            m_iSkipStorageInit = 1;
+        }
+        startTime = DateTime.Now;
+        comm.StartReading();
+        SaharaDownloadProgrammer(programmerName);
+        comm.StopReading();
+        Thread.Sleep(TIME_WAIT_FIREHOSE_START);
+        Ping();
+        ConfigureDDR(comm.intSectorSize, BUFFER_SECTORS, storageType, m_iSkipStorageInit);
+    }
+
+    /// <summary>
+    /// Sauvegarde seule (CLI <c>miflash backup</c>) : session firehose puis
+    /// lecture des partitions de rawprogram_backup.xml vers
+    /// <see cref="RestoreDirectory"/>, enfin redémarrage de la cible.
+    /// </summary>
+    public void BackupOnly()
+    {
+        try
+        {
+            BeginSession();
+            BackupRom();
+            if (!NeedBackupRom(swPath))
+            {
+                throw new Exception("rawprogram_backup.xml not found in " + swPath);
+            }
+            PartialReset();
+            FlashStatus.UpdateDeviceStatus(deviceName, 1f, "backup done: " + RestoreDirectory, "success", isDone: true);
+        }
+        catch (Exception ex)
+        {
+            FlashStatus.UpdateDeviceStatus(deviceName, null, ex.Message, "error", isDone: true);
+            throw;
+        }
+        finally
+        {
+            comm.Close();
+        }
+    }
+
+    /// <summary>
+    /// Restauration seule (CLI <c>miflash restore</c>) : session firehose puis
+    /// écriture des images listées par rawprogram_restore.xml depuis
+    /// <paramref name="fromDirectory"/> (défaut : <see cref="RestoreDirectory"/>
+    /// de la session), enfin redémarrage.
+    /// </summary>
+    public void RestoreOnly(string fromDirectory)
+    {
+        try
+        {
+            BeginSession();
+            string text2 = string.IsNullOrEmpty(fromDirectory) ? RestoreDirectory : fromDirectory;
+            Log.w(comm.PortName, "restoreImagePath:" + text2);
+            string[] array = FileSearcher.SearchFiles(swPath, SoftwareImage.RawRestorePattern);
+            if (array.Length == 0)
+            {
+                throw new Exception("rawprogram_restore.xml not found in " + swPath);
+            }
+            for (int i = 0; i < array.Length; i++)
+            {
+                WriteFilesToDevice(text2, array[i]);
+            }
+            PartialReset();
+            FlashStatus.UpdateDeviceStatus(deviceName, 1f, "restore done", "success", isDone: true);
+        }
+        catch (Exception ex)
+        {
+            FlashStatus.UpdateDeviceStatus(deviceName, null, ex.Message, "error", isDone: true);
+            throw;
+        }
+        finally
+        {
+            comm.Close();
+        }
+    }
+
+    /// <summary>
+    /// Provision seul (CLI <c>miflash provision</c>) : boucle provision de
+    /// XiaomiFlashNew (l.180–201) isolée — provision, attente, partial_reset
+    /// (ou reset_to_edl + re-Sahara), ping et re-configure avec
+    /// skipStorageInit=0.
+    /// </summary>
+    public void ProvisionOnly()
+    {
+        try
+        {
+            BeginSession();
+            if (!Provision(swPath))
+            {
+                throw new Exception("provision*.xml not found in " + swPath);
+            }
+            Thread.Sleep(5000);
+            if (comm.isSupportPartialReset)
+            {
+                Log.w(comm.PortName, "Partial_Reset target");
+                PartialReset();
+            }
+            else
+            {
+                Log.w(comm.PortName, "Reset_To_Edl target");
+                ResetToEdl();
+                SaharaDownloadProgrammer(programmerName);
+                Thread.Sleep(TIME_WAIT_FIREHOSE_START);
+            }
+            Ping();
+            ConfigureDDR(comm.intSectorSize, BUFFER_SECTORS, storageType, 0);
+            FlashStatus.UpdateDeviceStatus(deviceName, 1f, "provision done", "success", isDone: true);
+        }
+        catch (Exception ex)
+        {
+            FlashStatus.UpdateDeviceStatus(deviceName, null, ex.Message, "error", isDone: true);
+            throw;
+        }
+        finally
+        {
+            comm.Close();
+        }
+    }
+
+    /// <summary>
+    /// Redémarrage de la cible (CLI <c>miflash reboot</c>) : session firehose
+    /// puis <see cref="PartialReset"/> ; avec <paramref name="toEdl"/>,
+    /// <see cref="ResetToEdl"/> laisse la cible en mode 9008.
+    /// </summary>
+    public void Reboot(bool toEdl)
+    {
+        try
+        {
+            BeginSession();
+            if (toEdl)
+            {
+                ResetToEdl();
+            }
+            else
+            {
+                PartialReset();
+            }
+            FlashStatus.UpdateDeviceStatus(deviceName, 1f, toEdl ? "reboot to edl done" : "reboot done", "success", isDone: true);
+        }
+        catch (Exception ex)
+        {
+            FlashStatus.UpdateDeviceStatus(deviceName, null, ex.Message, "error", isDone: true);
+            throw;
+        }
+        finally
+        {
+            comm.Close();
+        }
+    }
 
     /// <summary>
     /// Téléverse le programmer via Sahara (M3.1), avec la boucle de récupération

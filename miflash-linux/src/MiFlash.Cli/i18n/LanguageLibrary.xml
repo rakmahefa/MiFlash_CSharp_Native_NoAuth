@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<LanguageLibrary>
+
+  <!-- M4.6 : libellés CLI (fr/en/zh). Surcharge utilisateur :
+       $XDG_CONFIG_HOME/miflash/LanguageLibrary.xml (mêmes CTRLID). -->
+
+  <lan CTRLID="Cli.Description" ENG="Native Linux port of Xiaomi MiFlash (EDL 9008, NoAuth) - educational use only"
+       FRE="Portage natif Linux de MiFlash Xiaomi (EDL 9008, NoAuth) - usage educatif uniquement"
+       CHN_S="小米刷机工具 Linux 原生移植（EDL 9008，免认证）— 仅供学习使用"></lan>
+
+  <lan CTRLID="Cli.EducationalWarning" ENG="WARNING: educational use only. Flashing can brick the device and voids the warranty. You are responsible for what you write."
+       FRE="ATTENTION : usage educatif uniquement. Le flash peut briquer l'appareil et annule la garantie. Vous etes responsable de ce que vous ecrivez."
+       CHN_S="警告：仅供学习使用。刷机可能导致设备变砖并失去保修，写入内容的风险由您自行承担。"></lan>
+
+  <lan CTRLID="Cli.ConfirmPrompt" ENG="Type 'yes' to continue: "
+       FRE="Tapez 'yes' pour continuer : "
+       CHN_S="输入 yes 继续："></lan>
+
+  <lan CTRLID="Cli.ConfirmRequired" ENG="confirmation required: rerun with --yes or answer the prompt (stdin is not a terminal)"
+       FRE="confirmation requise : relancez avec --yes ou repondez a l'invite (stdin n'est pas un terminal)"
+       CHN_S="需要确认：请使用 --yes 重新运行，或在提示处回答（标准输入不是终端）"></lan>
+
+  <lan CTRLID="Cli.Aborted" ENG="aborted by user"
+       FRE="annule par l'utilisateur"
+       CHN_S="已被用户取消"></lan>
+
+  <lan CTRLID="Cli.NoEdlDevice" ENG="no EDL 9008 device found (check cable/udev: 'miflash doctor')"
+       FRE="aucun appareil EDL 9008 detecte (verifiez le cable/udev : 'miflash doctor')"
+       CHN_S="未检测到 EDL 9008 设备（请检查数据线/udev：运行 'miflash doctor'）"></lan>
+
+  <lan CTRLID="Cli.DeviceNotFound" ENG="device not found: "
+       FRE="appareil introuvable : "
+       CHN_S="未找到设备："></lan>
+
+  <lan CTRLID="Cli.DevicesHeader" ENG="Connected devices:"
+       FRE="Appareils connectes :"
+       CHN_S="已连接设备："></lan>
+
+  <lan CTRLID="Cli.NoDevice" ENG="no device connected"
+       FRE="aucun appareil connecte"
+       CHN_S="没有已连接的设备"></lan>
+
+  <lan CTRLID="Cli.WatchHint" ENG="watching for device changes (Ctrl+C to stop)..."
+       FRE="surveillance des appareils (Ctrl+C pour arreter)..."
+       CHN_S="正在监视设备变化（Ctrl+C 停止）…"></lan>
+
+  <lan CTRLID="Cli.DeviceArrived" ENG="[+] arrived "
+       FRE="[+] arrive "
+       CHN_S="[+] 已连接 "></lan>
+
+  <lan CTRLID="Cli.DeviceLeft" ENG="[-] removed "
+       FRE="[-] retire "
+       CHN_S="[-] 已移除 "></lan>
+
+  <lan CTRLID="Cli.ResultsHeader" ENG="Results:"
+       FRE="Resultats :"
+       CHN_S="结果："></lan>
+
+  <lan CTRLID="Cli.Success" ENG="success"
+       FRE="succes"
+       CHN_S="成功"></lan>
+
+  <lan CTRLID="Cli.Error" ENG="error"
+       FRE="erreur"
+       CHN_S="失败"></lan>
+
+  <lan CTRLID="Cli.LogWritten" ENG="log: "
+       FRE="journal : "
+       CHN_S="日志："></lan>
+
+  <lan CTRLID="Cli.DoctorTitle" ENG="Environment check"
+       FRE="Verification de l'environnement"
+       CHN_S="环境检查"></lan>
+
+  <lan CTRLID="Cli.Doctor.Ok" ENG="OK"
+       FRE="OK"
+       CHN_S="正常"></lan>
+
+  <lan CTRLID="Cli.Doctor.Fail" ENG="FAIL"
+       FRE="ECHEC"
+       CHN_S="失败"></lan>
+
+  <lan CTRLID="Cli.Doctor.Warn" ENG="WARN"
+       FRE="ATTENTION"
+       CHN_S="注意"></lan>
+
+</LanguageLibrary>

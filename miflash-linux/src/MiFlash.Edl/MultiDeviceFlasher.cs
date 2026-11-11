@@ -8,6 +8,18 @@ using MiFlash.Core.Transport;
 
 namespace MiFlash.Edl;
 
+/// <summary>Opération exécutée par un <see cref="EdlJob"/> (défaut : flash
+/// complet, comme l'atelier Windows ; les variantes alimentent le CLI M4).</summary>
+public enum EdlOperation
+{
+    Flash,
+    Backup,
+    Restore,
+    Provision,
+    Reboot,
+    RebootToEdl,
+}
+
 /// <summary>Travail de flash soumis au <see cref="MultiDeviceFlasher"/> :
 /// un appareil (nom logique), un répertoire d'images et une fabrique de
 /// transport (le port est rouvert à chaque essai, cf. reset_to_edl).</summary>
@@ -16,6 +28,13 @@ public sealed class EdlJob
     public string DeviceName { get; init; }
 
     public string SwPath { get; init; }
+
+    /// <summary>Opération à exécuter (défaut <see cref="EdlOperation.Flash"/>).</summary>
+    public EdlOperation Operation { get; init; } = EdlOperation.Flash;
+
+    /// <summary>Répertoire source d'une restauration
+    /// (<see cref="EdlOperation.Restore"/>) ; défaut : session courante.</summary>
+    public string RestoreFrom { get; init; }
 
     /// <summary>Fabrique le transport pour cet appareil (appelée au lancement ;
     /// le <see cref="EdlFlasher"/> gère ensuite Close/Open sur le même objet).</summary>
@@ -96,8 +115,16 @@ public sealed class MultiDeviceFlasher
         job.Configure?.Invoke(flasher);
         try
         {
-            flasher.Flash();
-            return new EdlJobResult { DeviceName = job.DeviceName, Success = true, Message = "flash done" };
+            string message = job.Operation switch
+            {
+                EdlOperation.Backup => RunBackup(flasher),
+                EdlOperation.Restore => RunRestore(flasher, job.RestoreFrom),
+                EdlOperation.Provision => RunProvision(flasher),
+                EdlOperation.Reboot => RunReboot(flasher, toEdl: false),
+                EdlOperation.RebootToEdl => RunReboot(flasher, toEdl: true),
+                _ => RunFlash(flasher),
+            };
+            return new EdlJobResult { DeviceName = job.DeviceName, Success = true, Message = message };
         }
         catch (OperationCanceledException)
         {
@@ -108,5 +135,35 @@ public sealed class MultiDeviceFlasher
             // L'original journalise l'erreur par appareil et continue les autres.
             return new EdlJobResult { DeviceName = job.DeviceName, Success = false, Message = ex.Message, Error = ex };
         }
+    }
+
+    private static string RunFlash(EdlFlasher flasher)
+    {
+        flasher.Flash();
+        return "flash done";
+    }
+
+    private static string RunBackup(EdlFlasher flasher)
+    {
+        flasher.BackupOnly();
+        return "backup done: " + flasher.RestoreDirectory;
+    }
+
+    private static string RunRestore(EdlFlasher flasher, string restoreFrom)
+    {
+        flasher.RestoreOnly(restoreFrom);
+        return "restore done";
+    }
+
+    private static string RunProvision(EdlFlasher flasher)
+    {
+        flasher.ProvisionOnly();
+        return "provision done";
+    }
+
+    private static string RunReboot(EdlFlasher flasher, bool toEdl)
+    {
+        flasher.Reboot(toEdl);
+        return toEdl ? "reboot to edl done" : "reboot done";
     }
 }
