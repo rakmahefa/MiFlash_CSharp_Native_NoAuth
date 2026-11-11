@@ -19,7 +19,7 @@ distribués ici : vous devez fournir les vôtres.
 | M2 | Transport USB libusb (9008), udev, hotplug | ✅ fait (sauf test matériel M2.7) |
 | M3 | Moteur EDL complet (rawprogram/patch, provision, backup, multi-appareils) | ✅ fait (tag `v0.2-m3`, sauf matrice matérielle M3.10) |
 | M4 | CLI `miflash` | ✅ fait |
-| M5 | ROM fastboot (`flash_all*`) | ⏳ |
+| M5 | ROM fastboot (`flash_all*`) | ✅ fait (moteur natif .bat/.sh, timeout 11 min 40 s, Intel DNX) |
 | M6 | Packaging (deb/rpm/tarball), durcissement | ⏳ |
 
 Détails : [`spec-linux.md`](spec-linux.md) · [`plan.md`](plan.md) · [`todo.md`](todo.md).
@@ -47,6 +47,9 @@ miflash provision <dir>
 
 # Redémarrer la cible (ou la laisser en mode EDL 9008)
 miflash reboot [dir] [--edl]
+
+# Flash d'une ROM fastboot via flash_all*.bat/.sh (moteur natif, sans shell)
+miflash flash-fastboot <rom> [--script auto|all|except-storage|lock] [--device serial]… [--yes]
 ```
 
 Options communes : `--device` (répétable, par localisation `bus.port` ou numéro
@@ -116,6 +119,7 @@ miflash backup <dir>                 # read-only backup (rawprogram_backup.xml)
 miflash restore <dir> --from <dir>   # restore a backup session
 miflash provision <dir>              # UFS provisioning (provision*.xml)
 miflash reboot [dir] [--edl]         # reboot, or stay in EDL 9008 mode
+miflash flash-fastboot <rom>          # fastboot ROM via flash_all* (native engine)
 ```
 
 Common options: `--device` (repeatable, by `bus.port` location or serial;

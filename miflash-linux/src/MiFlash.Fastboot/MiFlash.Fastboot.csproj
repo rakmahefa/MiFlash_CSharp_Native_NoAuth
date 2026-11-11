@@ -1,7 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\MiFlash.Core\MiFlash.Core.csproj" />
+    <ProjectReference Include="..\MiFlash.Transport.Usb\MiFlash.Transport.Usb.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -75,12 +75,13 @@
 
 ## M5 — Fastboot
 
-- [ ] M5.1 `ProcessRunner` POSIX (port de `Cmd.cs` sans cmd.exe) : sortie ligne à ligne, timeout, kill arborescence
-- [ ] M5.2 Détection fastboot : `fastboot devices` + corrélation libusb (serial ↔ bus/port)
-- [ ] M5.3 Moteur de scripts natif : parsing `flash_all*.bat`/`.sh` en opérations (`fastboot flash -s …`), choix clean / except-storage / lock
-- [ ] M5.4 Timeout global 11 min 40 s + kill (port `ScriptDevice.flash()`)
-- [ ] M5.5 Cas Intel DNX : `fastboot boot loader.efi` (kernelflinger)
-- [ ] M5.6 `miflash flash-fastboot <rom> [--script auto]`
+- [x] M5.1 `ProcessRunner` POSIX (port de `Cmd.cs` sans cmd.exe) : sortie ligne à ligne (stdout+stderr, Log + FlashStatus), détection d'erreur fidèle (`error`/`fail`/`missmatching image and device`), timeout par commande (boucle `WaitForExit(ms)` — pas de surcharge CancellationToken en .NET 8), kill arborescence (`Kill(entireProcessTree)` remplace `taskkill /T /F`) — `MiFlash.Fastboot/ProcessRunner.cs`
+- [x] M5.2 Détection fastboot : `FastbootCli.LocateFastboot()` (PATH, remplace fastboot.exe embarqué) + `ListDevices` (parsing `fastboot devices -l`, remplace `UsbDevice.GetScriptDevice()`/WMI) + `CorrelateWithUsb` (serial ↔ identité libusb M2.1 pour VID/PID)
+- [x] M5.3 Moteur de scripts natif : `ScriptEngine.Parse` des `flash_all*.bat` ET `.sh` en opérations (`fastboot %* verbe args`) — `%~dp0`/`set "filepath=…"`/`filepath=$(…)` → répertoire du script, chemins Windows → POSIX, queues `|| @echo … && exit /B 1` éliminées (échec = code non nul), `ping -n N`/`sleep N` → attentes, `exit` → fin ; sélection `FlashScript.Resolve` (all/except-storage/lock + .sh fallback) port de `FlashType` — exécution directe sans shell (remplace `pushd…&&script.bat -s com&&popd`)
+- [x] M5.4 Timeout global 11 min 40 s + kill (port `ScriptDevice.flash()`) : `FastbootFlasher.GlobalFlashTimeout`, budget restant par opération, kill + « flash timeout » — progression = opérations terminées/total (remplace `DummyProgress`)
+- [x] M5.5 Cas Intel DNX (8087:0a65) : `fastboot boot <images/loader.efi>` (kernelflinger) avant le script + attente de ré-énumération ≤5 s (port l.205–238) ; MES/X5MES et `GrapLog` (lkmsg/lpmsg, usine) hors périmètre v1
+- [x] M5.6 `miflash flash-fastboot <rom> [--script auto|all|except-storage|lock|<fichier>] [--device serial]… [--yes]` — cibles = `fastboot devices` (filtrées par `--device`), VID/PID via corrélation libusb, confirmation destructive, logs `SessionLog` par appareil, parallèle 1 Task/appareil ; fastboot introuvable → exit 4 avec conseil `miflash doctor`
+- [x] M5.7 Tests : **123 verts** (+15) — parsing .bat (sleep 2, chemins résolus, queues d'erreur éliminées, exit stoppe) et .sh (`$filepath`), variantes FlashScript + fallback .sh, ProcessRunner (sortie/code, détection lignes d'erreur, timeout kill arborescence `sh -c sleep`), FastbootFlasher complet avec faux binaire fastboot (opérations + `-s serial`, échec code non nul, DNX `boot loader.efi` en 1re invocation, script vide échoue), FastbootCli (LocateFastboot PATH, parsing `devices -l`) ; CLI testé bout-en-bout (faux fastboot : confirmations, exit codes 1/2)
 
 ## M6 — Packaging / GUI / durcissement
 

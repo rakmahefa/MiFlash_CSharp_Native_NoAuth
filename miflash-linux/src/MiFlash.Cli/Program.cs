@@ -51,6 +51,7 @@ internal static class Program
 
         root.Add(DevicesCommand.Build());
         root.Add(FlashCommand.Build());
+        root.Add(FastbootCommand.Build());
         root.Add(BackupCommand.Build());
         root.Add(RestoreCommand.Build());
         root.Add(ProvisionCommand.Build());
