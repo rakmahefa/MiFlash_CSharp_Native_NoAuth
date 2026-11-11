@@ -49,6 +49,10 @@ public class Comm
 
     public string edlAuthErr { get; set; } = "error: only nop and sig tag can be recevied before authentication";
 
+    /// <summary>Nombre d'itérations de polling de GetResponse (32 = fidèle au
+    /// code Windows, ~16 s par réponse NAK ; réduit dans les tests).</summary>
+    public int responsePolls = 32;
+
     public bool needEdlAuth = true;
 
     public bool isSupportPartialReset;
@@ -352,7 +356,7 @@ public class Comm
         int num = 2;
         if (waiteACK)
         {
-            num = 32;
+            num = responsePolls;
         }
         while (num-- > 0 && !flag)
         {

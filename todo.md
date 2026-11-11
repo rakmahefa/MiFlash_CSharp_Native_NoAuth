@@ -41,16 +41,20 @@
 
 ## M3 — Moteur EDL complet
 
-- [ ] M3.1 Porter `SaharaDownloadProgrammer` (avec boucle de récupération « switch mode back » l. 390–444) en `async`
-- [ ] M3.2 `ConfigureDDR` + gestion `needEdlAuth` → `StaticBlobAuthenticator` (blob 256 o de `dlAuth()`)
-- [ ] M3.3 Peek CPUID → sélection programmer lite/DDR4/DDR5 (`prog_firehose_lite.elf`, `prog_ufs_firehose_sm8250_ddr_4/5.elf`) + détection UFS/eMMC
-- [ ] M3.4 `BackupRom` / restore (`rawprogram_backup/restore.xml`) + `NeedBackupRom/NeedRestoreRom/NeedProvision/NeedDifferentiateDdr`
-- [ ] M3.5 `Provision` (SkipStorageInit=1, partial_reset ou reset_to_edl + re-Sahara)
-- [ ] M3.6 `FirehoseDownloadImg` : rawprogram*.xml → programs par secteurs (sparse + bruts), progression (`DummyProgress`)
-- [ ] M3.7 `ApplyPatchesToDevice` : patch*.xml → `<patch>` (vérifier correctifs récents « Fix Bugs at PATCH Operations »)
-- [ ] M3.8 `GetSha256Digest`, `Firmwarewrite`, `SetBootPartition` (UFS), `Reboot` (reset/partial_reset/reset_to_edl)
-- [ ] M3.9 Multi-appareils parallèles (Task/appareil, CancellationToken, kill propre)
-- [ ] M3.10 Validation matérielle matrice README : SD 636 / 680 / 845 / 855 / 860 / 870 → rapport de test dans `docs/`
+- [x] M3.1 Porter `SaharaDownloadProgrammer` (avec boucle de récupération « switch mode back » l. 390–444) — `EdlFlasher.SaharaDownloadProgrammer()` (synchrone fidèle à l'original ; async reporté au durcissement M6)
+- [x] M3.2 `ConfigureDDR` + gestion `needEdlAuth` → `DlAuth()` via `IEdlAuthenticator`/`StaticBlobAuthenticator` (blob 256 o de `dlAuth()`)
+- [x] M3.3 Peek CPUID → sélection programmer lite/DDR4/DDR5 (`prog_firehose_lite.elf`, `prog_ufs_firehose_sm8250_ddr_4/5.elf`) + détection UFS/eMMC par nom de fichier + re-Sahara après `reset_to_edl` si le programmer détecté diffère
+- [ ] M3.4 `BackupRom` / restore (`rawprogram_backup/restore.xml`) + `NeedBackupRom/NeedRestoreRom` — prochain passage
+- [ ] M3.5 `Provision` (SkipStorageInit=1, partial_reset ou reset_to_edl + re-Sahara) — prochain passage (`NeedProvision` déjà porté, drapeau `m_iSkipStorageInit` câblé)
+- [x] M3.6 `FirehoseDownloadImg` : rawprogram*.xml → programs par secteurs (sparse via `CekSparse` + `WriteSparseFileToDevice`, bruts via `WriteFile`), progression (`FlashStatus`)
+- [x] M3.7 `ApplyPatchesToDevice` : patch*.xml → `<patch>` (port fidèle l.1448–1530, correctifs « Fix Bugs at PATCH Operations » inclus)
+- [ ] M3.8 `GetSha256Digest`, `Firmwarewrite` — prochain passage ; ✅ `SetBootPartition` (UFS), `Reboot` (partial_reset/reset_to_edl portés)
+- [ ] M3.9 Multi-appareils parallèles (Task/appareil, CancellationToken, kill propre) — prochain passage
+- [ ] M3.10 Validation matérielle matrice README : SD 636 / 680 / 845 / 855 / 860 / 870 → rapport de test dans `docs/` — **en attente de matériel**
+
+> Tests d'intégration sans matériel (RNF-5) : `ScriptedEdlDevice` simule une cible
+> 9008 (HELLO → READ DATA → DONE, ACK/NAK firehose, NAK d'auth NoAuth, peek
+> DDR4/5) — 85 tests verts couvrant le flux complet M3.1→M3.8.
 
 ## M4 — CLI
 
