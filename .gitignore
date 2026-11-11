@@ -1,7 +1,40 @@
-﻿################################################################################
-# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+# MiFlash — hygiène du dépôt (M0.1)
+# Le code Windows historique (src/) est conservé comme référence de lecture ;
+# toute sortie de build, binaire tiers et fichier utilisateur est ignorée.
 ################################################################################
 
-/.vs/MiFlash/CopilotIndices/17.14.734.62261
-/.vs/MiFlash/FileContentIndex
-/.vs/MiFlash/v17
+# Build .NET
+[Bb]in/
+[Oo]bj/
+artifacts/
+TestResults/
+nupkg/
+
+# Binaires Windows tiers (RNF-8 : ne jamais redistribuer — l'utilisateur fournit
+# ses loaders prog_*_firehose_*.elf)
+*.dll
+*.exe
+*.pdb
+*.lib
+*.so
+*.dylib
+*.msi
+*.elf
+*.mbn
+
+# IDE / user
+.vs/
+.idea/
+*.user
+*.suo
+*.swp
+.DS_Store
+
+# Logs
+log/
+logs/
+*.log
+
+# Nouvelle solution Linux (miflash-linux) : ignorer seulement ses sorties,
+# pas les sources (couvert par bin/ obj/ ci-dessus)
