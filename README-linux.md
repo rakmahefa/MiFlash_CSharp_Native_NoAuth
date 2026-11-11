@@ -172,6 +172,30 @@ La CI (GitHub Actions, `ubuntu-latest`) build + teste chaque push : voir
 `.github/workflows/ci.yml`. Les tags `v*` déclenchent la release avec tarballs
 self-contained linux-x64/arm64 + `SHA256SUMS` : `.github/workflows/release.yml`.
 
+## GUI Avalonia (branche `feature/gui-avalonia`)
+
+Un GUI graphique `miflash-gui` (Avalonia 11, Fluent) est en cours
+d'intégration sur la branche [`feature/gui-avalonia`](https://github.com/rakmahefa/MiFlash_CSharp_Native_NoAuth/tree/feature/gui-avalonia) :
+
+- **liste des appareils** EDL 9008 + fastboot, surveillance hotplug
+  (option « Surveiller »), progression par appareil ;
+- **sélection du répertoire ROM** (parcourir) + choix du programmer
+  (auto/lite/ddr4/ddr5) ;
+- opérations **Flash EDL, Flash fastboot (all / except-storage), Backup,
+  Reboot, doctor** — exactement les mêmes moteurs que le CLI
+  (`MultiDeviceFlasher` M3.9, `FastbootFlasher` M5) ;
+- confirmation destructive (équivalent `--yes`), journal de session et logs
+  XDG réutilisés du CLI.
+
+```bash
+cd miflash-linux
+dotnet run --project src/MiFlash.Gui    # SDK .NET 8 requis (GTK ou X11)
+```
+
+MVVM sans toolkit externe : les ViewModels ne dépendent pas d'Avalonia
+(16 tests headless). Reste à faire avant fusion : packaging GUI
+(tarball/deb), puis tag `v0.4`.
+
 ## Structure du dépôt
 
 ```

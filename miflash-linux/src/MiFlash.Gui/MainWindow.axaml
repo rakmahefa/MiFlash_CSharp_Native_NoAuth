@@ -1,0 +1,84 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:MiFlash.Gui.ViewModels"
+        x:Class="MiFlash.Gui.MainWindow"
+        x:DataType="vm:MainViewModel"
+        x:CompileBindings="True"
+        Title="MiFlash Linux — flash EDL / fastboot"
+        Width="1080" Height="760"
+        WindowStartupLocation="CenterScreen">
+
+  <DockPanel>
+
+    <!-- Bandeau d'avertissement éducatif (équivalent du disclaimer CLI M4.4). -->
+    <Border DockPanel.Dock="Top" Padding="12,8" Background="#8B0000">
+      <TextBlock Text="⚠ Outil à usage éducatif — le flash peut effacer le stockage et bricker l'appareil définitivement. Aucune affiliation Xiaomi/Qualcomm."
+                 Foreground="White" TextWrapping="Wrap" FontSize="12" />
+    </Border>
+
+    <!-- Journal de session (Log.Sink + résultats). -->
+    <Grid DockPanel.Dock="Bottom" MinHeight="230" Margin="8" RowDefinitions="Auto,*">
+      <TextBlock Grid.Row="0" Text="Journal" FontWeight="Bold" Margin="0,0,0,4" />
+      <ListBox Grid.Row="1" ItemsSource="{Binding LogLines}" FontSize="12"
+               ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+    </Grid>
+
+    <Grid ColumnDefinitions="340,*" Margin="8">
+
+      <!-- Colonne gauche : appareils détectés + progression par appareil. -->
+      <DockPanel Grid.Column="0" Margin="0,0,8,0">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
+          <Button Content="Rafraîchir" Command="{Binding RefreshCommand}" />
+          <CheckBox Content="Surveiller (hotplug)" IsChecked="{Binding Watch}" VerticalAlignment="Center" />
+        </StackPanel>
+        <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" MinHeight="220">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:DeviceViewModel">
+              <StackPanel Margin="0,4" Spacing="3">
+                <TextBlock Text="{Binding DisplayName}" FontWeight="Bold" />
+                <ProgressBar Value="{Binding Progress}" Maximum="1" Minimum="0" Height="8" />
+                <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" FontSize="12" Foreground="Gray" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+
+      <!-- Colonne droite : répertoire ROM + opérations. -->
+      <ScrollViewer Grid.Column="1">
+        <StackPanel Spacing="10">
+          <TextBlock Text="Répertoire ROM" FontWeight="Bold" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0" Text="{Binding RomDirectory}"
+                     Watermark="ex. ~/ROM/alioth_global_images_V14.0.x.x (dossier contenant rawprogram*.xml)" />
+            <Button Grid.Column="1" Content="Parcourir…" Command="{Binding BrowseCommand}" Margin="8,0,0,0" />
+          </Grid>
+          <TextBlock Text="Répertoire racine de la ROM fastboot ; l'outil descend automatiquement dans images/ (le programmer .elf doit y être, à côté des rawprogram*.xml)."
+                     FontSize="11" TextWrapping="Wrap" Foreground="Gray" />
+
+          <TextBlock Text="Programmer EDL" FontWeight="Bold" />
+          <ComboBox SelectedIndex="{Binding ProgrammerIndex}" MinWidth="260" HorizontalAlignment="Left">
+            <ComboBoxItem Content="auto (détecte le prog_*_firehose_* présent)" />
+            <ComboBoxItem Content="lite (prog_firehose_lite.elf)" />
+            <ComboBoxItem Content="ddr4 (prog_ufs_firehose_sm8250_ddr_4.elf)" />
+            <ComboBoxItem Content="ddr5 (prog_ufs_firehose_sm8250_ddr_5.elf)" />
+          </ComboBox>
+
+          <CheckBox Content="Je comprends : flash / provision effacent le stockage de l'appareil (équivalent --yes)"
+                    IsChecked="{Binding Confirmed}" />
+
+          <Button Content="⚡ Flash EDL (9008)" Command="{Binding FlashEdlCommand}" FontSize="14" Padding="8" />
+          <Button Content="Flash fastboot — ROM complète (flash_all)" Command="{Binding FlashFastbootAllCommand}" />
+          <Button Content="Flash fastboot — sans effacer le stockage (except-storage)" Command="{Binding FlashFastbootExceptStorageCommand}" />
+          <Button Content="Sauvegarde des partitions (rawprogram_backup.xml)" Command="{Binding BackupCommand}" />
+          <Button Content="Redémarrer l'appareil (partial_reset)" Command="{Binding RebootCommand}" />
+
+          <Separator />
+          <Button Content="Vérifier l'environnement (doctor)" Command="{Binding DoctorCommand}" />
+          <TextBlock Text="Guide POCO F3 : docs/GUIDE-POCO-F3-EDL.md — logs : ~/.local/state/miflash/log/"
+                     FontSize="11" Foreground="Gray" TextWrapping="Wrap" />
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>
