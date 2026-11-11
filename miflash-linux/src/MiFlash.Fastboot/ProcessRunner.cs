@@ -71,7 +71,11 @@ public sealed class ProcessRunner
         try
         {
             process.Start();
-            Log.w(_deviceName, "start process id " + process.Id + " name " + process.ProcessName);
+            // ProcessName volontairement non lu : la propriété lève
+            // InvalidOperationException si le processus a déjà quitté (course
+            // observée sous charge avec « sh -c echo… » — test flaky CI
+            // be7edba run 42978072250). Le nom lancé est connu : fileName.
+            Log.w(_deviceName, "start process id " + process.Id + " name " + fileName);
 
             // Lecture ligne à ligne des deux flux (process_OutputDataReceived /
             // process_ErrorDataReceived l.271–316) : Log + statut + errMsg.
