@@ -9,6 +9,9 @@ namespace MiFlash.Cli.Tests;
 /// Tests du portage i18n (M4.6) : bibliothèque embarquée, repli ENG, clé
 /// inconnue, détection de locale, surcharge utilisateur XDG.
 /// </summary>
+// Mutation de XDG_CONFIG_HOME/LC_ALL/LANG → collection sérialisée avec
+// AppPathsTests (cf. EnvSerialCollection).
+[Collection("env-serial")]
 public class LanguageProviderTests : IDisposable
 {
     private readonly string _oldConfigHome;

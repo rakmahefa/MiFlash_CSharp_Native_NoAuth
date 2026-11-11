@@ -4,6 +4,9 @@ using Xunit;
 
 namespace MiFlash.Core.Tests;
 
+// Mutation des variables XDG du process → collection sérialisée avec
+// LanguageProviderTests (cf. EnvSerialCollection).
+[Collection("env-serial")]
 public class AppPathsTests
 {
     [Fact]
