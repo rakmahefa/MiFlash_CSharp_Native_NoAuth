@@ -52,9 +52,11 @@ contents:
   - src: LICENSE
     dst: "@@LICDST@@"
 
+  # NB : pas de « type: doc » — nfpm 2.x DEB retire le fichier du paquet avec
+  # ce type (comportement constaté : README absent du data.tar.gz), alors que
+  # RPM le garde ; un fichier simple est installé partout.
   - src: README-linux.md
     dst: /usr/share/doc/miflash-linux/README-linux.md
-    type: doc
 
 scripts:
   postinstall: packaging/nfpm/postinstall.sh

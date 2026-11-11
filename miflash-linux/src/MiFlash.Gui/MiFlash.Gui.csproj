@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- GUI Avalonia 11 (M6.3) — équivalent minimal de MainFrm/ProcessFrm :
+       liste appareils + sélection répertoire + progression + journal.
+       Les ViewModels ne dépendent pas d'Avalonia (tests headless). -->
+  <ItemGroup>
+    <ProjectReference Include="..\MiFlash.Core\MiFlash.Core.csproj" />
+    <ProjectReference Include="..\MiFlash.Edl\MiFlash.Edl.csproj" />
+    <ProjectReference Include="..\MiFlash.Fastboot\MiFlash.Fastboot.csproj" />
+    <ProjectReference Include="..\MiFlash.Transport.Usb\MiFlash.Transport.Usb.csproj" />
+    <!-- Réutilise SessionLog, DoctorService et l'i18n du CLI. -->
+    <ProjectReference Include="..\MiFlash.Cli\MiFlash.Cli.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.23" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>miflash-gui</AssemblyName>
+    <RootNamespace>MiFlash.Gui</RootNamespace>
+  </PropertyGroup>
+
+</Project>

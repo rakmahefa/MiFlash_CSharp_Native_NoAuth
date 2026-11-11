@@ -1,11 +1,13 @@
 # Maintainer: rakmahefa <rakmahefa@users.noreply.github.com>
 # PKGBUILD AUR pour miflash-linux — construit depuis le tag git du dépôt.
+# Paquet scindé : miflash-linux (CLI + règles udev) et miflash-linux-gui
+# (GUI Avalonia, .desktop + icône, dépend du paquet CLI).
 # Publication : copier packaging/aur/{PKGBUILD,miflash-linux.install}
 # vers aur.archlinux.org/miflash-linux/ puis y mettre à jour pkgver/pkgrel
 # à chaque release.
 
-pkgname=miflash-linux
-pkgver=1.0.0
+pkgname=(miflash-linux miflash-linux-gui)
+pkgver=1.0.1
 pkgrel=1
 pkgdesc='Xiaomi MiFlash for Linux: native EDL (Qualcomm 9008) + fastboot flashing tool'
 arch=('x86_64' 'aarch64')
@@ -35,22 +37,51 @@ build() {
 
     dotnet publish miflash-linux/src/MiFlash.Cli \
         -c Release -r "${rid}" --self-contained true \
-        -o "${srcdir}/publish"
+        -o "${srcdir}/publish-cli"
+
+    dotnet publish miflash-linux/src/MiFlash.Gui \
+        -c Release -r "${rid}" --self-contained true \
+        -o "${srcdir}/publish-gui"
 }
 
-package() {
+package_miflash-linux() {
+    pkgdesc='Xiaomi MiFlash for Linux: native EDL (Qualcomm 9008) + fastboot CLI'
     cd "${srcdir}/${_repo}"
 
     # Application self-contained (~210 fichiers) + lien /usr/bin/miflash.
     install -dm755 "${pkgdir}/usr/lib/miflash-linux"
-    cp -a "${srcdir}/publish/." "${pkgdir}/usr/lib/miflash-linux/"
+    cp -a "${srcdir}/publish-cli/." "${pkgdir}/usr/lib/miflash-linux/"
     chmod 755 "${pkgdir}/usr/lib/miflash-linux/miflash"
     install -dm755 "${pkgdir}/usr/bin"
     ln -s /usr/lib/miflash-linux/miflash "${pkgdir}/usr/bin/miflash"
 
     # Licence + documentation + règles udev.
-    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
-    install -Dm644 README-linux.md "${pkgdir}/usr/share/doc/${pkgname}/README-linux.md"
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/miflash-linux/LICENSE"
+    install -Dm644 README-linux.md "${pkgdir}/usr/share/doc/miflash-linux/README-linux.md"
     install -Dm644 packaging/udev/51-miflash.rules \
         "${pkgdir}/usr/lib/udev/rules.d/51-miflash.rules"
+}
+
+package_miflash-linux-gui() {
+    pkgdesc='Xiaomi MiFlash for Linux: Avalonia GUI (EDL 9008 + fastboot)'
+    depends=("miflash-linux=${pkgver}" 'gcc-libs')
+    cd "${srcdir}/${_repo}"
+
+    # GUI self-contained + lien /usr/bin/miflash-gui.
+    install -dm755 "${pkgdir}/usr/lib/miflash-linux-gui"
+    cp -a "${srcdir}/publish-gui/." "${pkgdir}/usr/lib/miflash-linux-gui/"
+    chmod 755 "${pkgdir}/usr/lib/miflash-linux-gui/miflash-gui"
+    install -dm755 "${pkgdir}/usr/bin"
+    ln -s /usr/lib/miflash-linux-gui/miflash-gui "${pkgdir}/usr/bin/miflash-gui"
+
+    # Entrée .desktop + icône SVG hicolor.
+    install -Dm644 packaging/desktop/miflash-gui.desktop \
+        "${pkgdir}/usr/share/applications/miflash-gui.desktop"
+    install -Dm644 packaging/icons/miflash-gui.svg \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/miflash-gui.svg"
+
+    # Licence + guide GUI.
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/miflash-linux-gui/LICENSE"
+    install -Dm644 docs/GUIDE-GUI.md \
+        "${pkgdir}/usr/share/doc/miflash-linux-gui/GUIDE-GUI.md"
 }

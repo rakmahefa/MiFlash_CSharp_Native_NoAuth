@@ -51,6 +51,18 @@ jobs:
           -c Release -r linux-arm64 --self-contained true
           -o artifacts/miflash-linux-arm64
 
+      - name: Publish GUI linux-x64 (self-contained)
+        run: >
+          dotnet publish miflash-linux/src/MiFlash.Gui
+          -c Release -r linux-x64 --self-contained true
+          -o artifacts/miflash-gui-x64
+
+      - name: Publish GUI linux-arm64 (self-contained)
+        run: >
+          dotnet publish miflash-linux/src/MiFlash.Gui
+          -c Release -r linux-arm64 --self-contained true
+          -o artifacts/miflash-gui-arm64
+
       # nfpm (M6.2) : paquets .deb/.rpm par architecture — même version que le
       # tag (sans « v ») ; en workflow_dispatch, repli « 0.0.0-dev » (branche).
       - name: Install nfpm
@@ -70,10 +82,13 @@ jobs:
             *) VERSION="0.0.0-dev" ;;
           esac
           echo "version des paquets : ${VERSION}"
-          chmod +x packaging/nfpm/build-packages.sh
+          chmod +x packaging/nfpm/build-packages.sh packaging/nfpm/build-gui-packages.sh
           packaging/nfpm/build-packages.sh "${VERSION}" \
             "${PWD}/artifacts/miflash-linux-x64" \
             "${PWD}/artifacts/miflash-linux-arm64"
+          packaging/nfpm/build-gui-packages.sh "${VERSION}" \
+            "${PWD}/artifacts/miflash-gui-x64" \
+            "${PWD}/artifacts/miflash-gui-arm64"
 
       - name: Stage bundles (udev rules + README + tarballs + sommes)
         run: |
@@ -85,9 +100,23 @@ jobs:
             cp README-linux.md "${dir}/"
             chmod +x "${dir}/miflash" 2>/dev/null || true
           done
+          # Tarballs GUI : udev + README + .desktop + icône pour l'install manuelle.
+          for arch in x64 arm64; do
+            dir="artifacts/miflash-gui-${arch}"
+            mkdir -p "${dir}/packaging/udev" "${dir}/packaging/desktop" "${dir}/packaging/icons"
+            cp packaging/udev/51-miflash.rules "${dir}/packaging/udev/"
+            cp packaging/desktop/miflash-gui.desktop "${dir}/packaging/desktop/"
+            cp packaging/icons/miflash-gui.svg "${dir}/packaging/icons/"
+            cp README-linux.md "${dir}/"
+            chmod +x "${dir}/miflash-gui" 2>/dev/null || true
+          done
           tar -czf miflash-linux-x64.tar.gz -C artifacts miflash-linux-x64
           tar -czf miflash-linux-arm64.tar.gz -C artifacts miflash-linux-arm64
-          sha256sum miflash-linux-*.tar.gz miflash-linux_*.deb miflash-linux-*.rpm \
+          tar -czf miflash-gui-x64.tar.gz -C artifacts miflash-gui-x64
+          tar -czf miflash-gui-arm64.tar.gz -C artifacts miflash-gui-arm64
+          sha256sum miflash-linux-*.tar.gz miflash-gui-*.tar.gz \
+            miflash-linux_*.deb miflash-linux-*.rpm \
+            miflash-linux-gui_*.deb miflash-linux-gui-*.rpm \
             | tee SHA256SUMS
 
       - name: Upload run artifacts
@@ -97,8 +126,12 @@ jobs:
           path: |
             miflash-linux-x64.tar.gz
             miflash-linux-arm64.tar.gz
+            miflash-gui-x64.tar.gz
+            miflash-gui-arm64.tar.gz
             miflash-linux_*.deb
             miflash-linux-*.rpm
+            miflash-linux-gui_*.deb
+            miflash-linux-gui-*.rpm
             SHA256SUMS
           if-no-files-found: error
 
@@ -114,5 +147,7 @@ jobs:
           fi
           gh release upload "${TAG}" \
             miflash-linux-x64.tar.gz miflash-linux-arm64.tar.gz \
+            miflash-gui-x64.tar.gz miflash-gui-arm64.tar.gz \
             miflash-linux_*.deb miflash-linux-*.rpm \
+            miflash-linux-gui_*.deb miflash-linux-gui-*.rpm \
             SHA256SUMS --clobber

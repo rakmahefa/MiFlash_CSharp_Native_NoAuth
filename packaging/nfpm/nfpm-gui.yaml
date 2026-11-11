@@ -1,0 +1,75 @@
+# MiFlash Linux GUI — modèle de configuration nfpm (.deb + .rpm)
+#
+# Paquet complémentaire « miflash-linux-gui » : GUI Avalonia « miflash-gui »
+# (M6.3) — liste des appareils, sélection du répertoire ROM, progression et
+# journal par appareil. Dépend du paquet principal « miflash-linux »
+# (règles udev, documentation, CLI pour doctor/logs) ; self-contained, aucun
+# runtime .NET à installer.
+#
+# Placeholders substitués par build-gui-packages.sh (une config par format) :
+#   @@VERSION@@  version sans le « v » (ex. 1.0.1)
+#   @@ARCH@@     architecture native du format cible
+#                (deb : amd64 | arm64 — rpm : x86_64 | aarch64)
+#   @@DIR@@      répertoire de sortie dotnet publish self-contained
+#   @@LICDST@@   destination de la licence (convention deb « copyright »
+#                vs convention rpm /usr/share/licenses)
+#
+# Usage (via le script) :
+#   packaging/nfpm/build-gui-packages.sh <version> <gui-dir-x64> [gui-dir-arm64]
+#
+# Documentation : https://nfpm.goreleaser.com/
+
+name: miflash-linux-gui
+arch: "@@ARCH@@"
+platform: linux
+version: "@@VERSION@@"
+section: utils
+priority: optional
+maintainer: rakmahefa <rakmahefa@users.noreply.github.com>
+vendor: rakmahefa
+homepage: https://github.com/rakmahefa/MiFlash_CSharp_Native_NoAuth
+license: MIT
+description: |
+  Xiaomi MiFlash for Linux — graphical flashing tool (Avalonia GUI) for
+  Qualcomm EDL (9008) and fastboot. Companion package of miflash-linux:
+  device list with hotplug watch, ROM folder picker, per-device progress
+  and log viewer. Educational use, use at your own risk.
+# Dépendance envers le paquet principal (udev, docs, CLI) — « depends »
+# est mappé par nfpm en Depends (deb) et Requires (rpm).
+depends:
+  - "miflash-linux (= @@VERSION@@)"
+
+# Fichiers installés :
+#  - GUI self-contained dans /usr/lib/miflash-linux-gui (≈240 fichiers)
+#  - lien /usr/bin/miflash-gui vers l'exécutable
+#  - entrée .desktop + icône SVG hicolor
+#  - licence + guide GUI (/usr/share/doc)
+contents:
+  # type:tree (nfpm ≥ 2.33) copie l'arborescence du publish SANS l'aplatir —
+  # indispensable : les assemblies satellites localisées (es/, de/, fr/…)
+  # portent toutes le même nom de fichier et entreraient en collision.
+  - src: "@@DIR@@"
+    dst: /usr/lib/miflash-linux-gui
+    type: tree
+
+  - src: /usr/lib/miflash-linux-gui/miflash-gui
+    dst: /usr/bin/miflash-gui
+    type: symlink
+
+  - src: packaging/desktop/miflash-gui.desktop
+    dst: /usr/share/applications/miflash-gui.desktop
+
+  - src: packaging/icons/miflash-gui.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/miflash-gui.svg
+
+  - src: LICENSE
+    dst: "@@LICDST@@"
+
+  # NB : pas de « type: doc » — nfpm 2.x DEB retire le fichier du paquet avec
+  # ce type (comportement constaté), alors que RPM le garde.
+  - src: docs/GUIDE-GUI.md
+    dst: /usr/share/doc/miflash-linux-gui/GUIDE-GUI.md
+
+scripts:
+  postinstall: packaging/nfpm/postinstall-gui.sh
+  postremove: packaging/nfpm/postremove-gui.sh

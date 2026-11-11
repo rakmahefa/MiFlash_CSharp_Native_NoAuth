@@ -147,6 +147,45 @@ public class EdlFlasherTests : IDisposable
     }
 
     [Fact]
+    public void Flash_opens_the_transport_if_the_pipeline_left_it_closed()
+    {
+        // Régression v1.0.1 (retour matériel POCO F3) : le pipeline CLI/GUI
+        // (EdlTargets -> MultiDeviceFlasher) fabrique un transport NON ouvert ;
+        // BeginSession doit l'ouvrir avant Sahara, sinon « port ... is not
+        // open » dès le premier flash réel. Les autres tests appelaient
+        // device.Open() avant, masquant le défaut.
+        CreateImage("prog_ufs_firehose_sm8250_ddr_5.elf", 8192, 0x7F);
+        CreateImage("boot.img", 4096, 0xCD);
+        File.WriteAllText(Path.Combine(_tempDir, "rawprogram0.xml"),
+            "<?xml version=\"1.0\" ?>\n<data>\n" +
+            "  <program filename=\"boot.img\" label=\"boot\" num_partition_sectors=\"1\"" +
+            " physical_partition_number=\"0\" start_sector=\"0\" sparse=\"false\"" +
+            " file_sector_offset=\"0\" sector_size_in_bytes=\"4096\"/>\n" +
+            "</data>\n");
+        File.WriteAllText(Path.Combine(_tempDir, "patch0.xml"),
+            "<?xml version=\"1.0\" ?>\n<patches>\n" +
+            "  <patch filename=\"DISK\" sector_size_in_bytes=\"4096\" byte_offset=\"4\"" +
+            " physical_partition_number=\"0\" size_in_bytes=\"4\" start_sector=\"0\" value=\"0x11223344\" what=\"Update\"/>\n" +
+            "</patches>\n");
+
+        var device = new ScriptedEdlDevice { ProgrammerSize = 8192 }; // PAS d'Open()
+        var flasher = new EdlFlasher(device.PortName, _tempDir, device);
+
+        flasher.Flash(); // sans correctif : « port SIM9008 is not open. »
+
+        // Le flux a bien atteint Sahara puis firehose jusqu'au reset final.
+        Assert.NotEmpty(device.HostWrites);
+        Assert.Equal(48, device.HostWrites[0].Length); // HELLO RESPONSE
+        Assert.Equal(2u, BitConverter.ToUInt32(device.HostWrites[0], 0));
+        string allXml = string.Join("\n", device.HostWrites
+            .Where(w => w.Length > 5 && w[0] == (byte)'<' && w[1] == (byte)'?')
+            .Select(w => Encoding.UTF8.GetString(w)));
+        Assert.Contains("<program", allXml);
+        Assert.Contains("partial_reset", allXml);
+        Assert.Contains(_statusLog, s => s == "success:flash done");
+    }
+
+    [Fact]
     public void DlAuth_sends_authp_then_256_byte_blob()
     {
         var device = new ScriptedEdlDevice();
