@@ -1,0 +1,48 @@
+name: ci
+
+# CI du portage Linux (plan.md M0.4) : build + tests + format + artefact.
+# Aucun matériel requis — les tests protocole sont des golden tests (RNF-5).
+
+on:
+  push:
+    branches: [main, dev, "feat/**"]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  build-test:
+    name: build & test (ubuntu-latest, .NET 8)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore miflash-linux/MiFlash.Linux.sln
+
+      - name: Build (Release)
+        run: dotnet build miflash-linux/MiFlash.Linux.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test miflash-linux/MiFlash.Linux.sln -c Release --no-build
+
+      - name: Format (verify)
+        run: dotnet format miflash-linux/MiFlash.Linux.sln --verify-no-changes
+
+      - name: Publish CLI (linux-x64)
+        run: >
+          dotnet publish miflash-linux/src/MiFlash.Cli
+          -c Release -r linux-x64 --self-contained false
+          -o artifacts/miflash-linux
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: miflash-linux-${{ github.sha }}
+          path: artifacts/miflash-linux
+          if-no-files-found: error
