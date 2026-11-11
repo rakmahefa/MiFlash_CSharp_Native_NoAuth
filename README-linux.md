@@ -78,6 +78,12 @@ automatiquement (postinstall). Aucune dépendance runtime n'est requise
 Vérification en une commande : `miflash doctor` (libusb, udev, fastboot,
 répertoires XDG, runtime).
 
+### Premier flash réel ?
+
+Guide pas-à-pas pour POCO F3 (alioth) en EDL : **[`docs/GUIDE-POCO-F3-EDL.md`](docs/GUIDE-POCO-F3-EDL.md)**
+(préparation du répertoire ROM + programmer, entrée en mode 9008, commande,
+logs, plan B fastboot, dépannage).
+
 ## Utilisation du CLI (M4)
 
 ```bash
