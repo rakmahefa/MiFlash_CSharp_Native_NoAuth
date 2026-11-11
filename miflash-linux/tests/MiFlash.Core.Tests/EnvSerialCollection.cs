@@ -9,7 +9,7 @@ namespace MiFlash.Core.Tests;
 /// se marchent dessus sur XDG_CONFIG_HOME (race observée en CI sur bee89b4,
 /// run 42972193581 — 134/135 verts localement mais aléatoires en runner).
 /// </summary>
-[CollectionDefinition(Name = "env-serial", DisableParallelization = true)]
+[CollectionDefinition("env-serial", DisableParallelization = true)]
 public class EnvSerialCollection
 {
 }
