@@ -115,7 +115,7 @@ jobs:
           tar -czf miflash-gui-x64.tar.gz -C artifacts miflash-gui-x64
           tar -czf miflash-gui-arm64.tar.gz -C artifacts miflash-gui-arm64
           sha256sum miflash-linux-*.tar.gz miflash-gui-*.tar.gz \
-            miflash-linux_*.deb miflash-linux-*.rpm \
+            miflash-linux_*.deb miflash-linux-[0-9]*.rpm \
             miflash-linux-gui_*.deb miflash-linux-gui-*.rpm \
             | tee SHA256SUMS
 
@@ -129,7 +129,7 @@ jobs:
             miflash-gui-x64.tar.gz
             miflash-gui-arm64.tar.gz
             miflash-linux_*.deb
-            miflash-linux-*.rpm
+            miflash-linux-[0-9]*.rpm
             miflash-linux-gui_*.deb
             miflash-linux-gui-*.rpm
             SHA256SUMS
@@ -145,9 +145,13 @@ jobs:
           if ! gh release view "${TAG}" >/dev/null 2>&1; then
             gh release create "${TAG}" --title "miflash-linux ${TAG}" --generate-notes
           fi
+          # NB : glob CLI rpm « miflash-linux-[0-9]*.rpm » — le simple
+          # « miflash-linux-*.rpm » capture aussi les paquets GUI
+          # (miflash-linux-gui-…) et fait échouer l'upload en 422
+          # (asset déjà existant) — premier tag avec paquets GUI : v1.0.2.
           gh release upload "${TAG}" \
             miflash-linux-x64.tar.gz miflash-linux-arm64.tar.gz \
             miflash-gui-x64.tar.gz miflash-gui-arm64.tar.gz \
-            miflash-linux_*.deb miflash-linux-*.rpm \
+            miflash-linux_*.deb miflash-linux-[0-9]*.rpm \
             miflash-linux-gui_*.deb miflash-linux-gui-*.rpm \
             SHA256SUMS --clobber
