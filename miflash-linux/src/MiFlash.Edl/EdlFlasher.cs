@@ -248,6 +248,19 @@ public sealed class EdlFlasher
     /// </summary>
     public void BeginSession()
     {
+        // Bugfix v1.0.1 (retour matériel POCO F3) : le pipeline CLI/GUI
+        // (EdlTargets -> MultiDeviceFlasher) livre un transport NON ouvert —
+        // à l'atelier Windows, le port série était ouvert par DeviceCtrl avant
+        // XiaomiFlashNew. Les tests unitaires ouvraient le faux transport
+        // avant l'appel, ce qui masquait l'absence d'ouverture en production
+        // (« port 05C6:9008 ... is not open »). Ouvrir ici couvre tous les
+        // points d'entrée (flash/backup/restore/provision/reboot) et les deux
+        // transports (UsbTransport bulk, SerialTransport qcserial).
+        if (!comm.transport.IsOpen)
+        {
+            Log.w(comm.PortName, "open port " + comm.PortName);
+            comm.transport.Open();
+        }
         if (NeedProvision(swPath))
         {
             m_iSkipStorageInit = 1;
