@@ -17,7 +17,7 @@
 - [x] M0.3 Créer la solution .NET 8 multi-projets : `MiFlash.Core`, `MiFlash.Edl`, `MiFlash.Transport.Usb`, `MiFlash.Transport.Serial`, `MiFlash.Fastboot`, `MiFlash.Cli` — commit `36f046d` (LibUsbDotNet 3.0.224, System.IO.Ports 9.0.0, Directory.Build.props, 3 tests fumée)
 - [x] M0.4 CI GitHub Actions (ubuntu-latest) : `dotnet build` + `dotnet test` + `dotnet format --verify-no-changes` + artefact publish linux-x64 — commit `cc44780` (`.github/workflows/ci.yml`)
 - [x] M0.5 README-linux (fr/en) : usage éducatif, avertissement, prérequis — commit `cc44780` (+ `miflash-linux/README.md` guide dev, `.editorconfig`)
-- [x] M0.6 Workflow release (`.github/workflows/release.yml`) : tag `v*` → tests + publish self-contained linux-x64/arm64 + tarballs + `SHA256SUMS` + GitHub Release avec artefacts ; `workflow_dispatch` pour build manuel — testé localement (publish + exécution `version`)
+- [x] M0.6 Workflow release (`.github/workflows/release.yml`) : tag `v*` → tests + publish self-contained linux-x64/arm64 + tarballs + `SHA256SUMS` + GitHub Release avec artefacts ; `workflow_dispatch` pour build manuel — **validé en CI** (tag `v0.2-m3`, run 42962696046 : release publiée avec tarballs x64 30,9 Mo / arm64 29,6 Mo + SHA256SUMS)
 
 ## M1 — MiFlash.Core (protocoles, OS-agnostique)
 
@@ -52,6 +52,7 @@
 - [x] M3.8 `GetSha256Digest` (+`GetSha256`), `Firmwarewrite` — `SaveFfu.ffuList`/`MiAppConfig` remplacés par `FfuList`/`FfuDirectory` (défaut XDG `…/miflash/ffu`), `MiFlashGlobal.IsFirmwarewrite` → propriété `IsFirmwarewrite` ; ✅ `SetBootPartition` (UFS), `Reboot` (partial_reset/reset_to_edl portés)
 - [x] M3.9 Multi-appareils parallèles — `MultiDeviceFlasher` (+`EdlJob`/`EdlJobResult`) : 1 Task/appareil, `MaxDegreeOfParallelism` (SemaphoreSlim, défaut 4), CancellationToken, un échec n'arrête pas les autres, résultats dans l'ordre de soumission
 - [ ] M3.10 Validation matérielle matrice README : SD 636 / 680 / 845 / 855 / 860 / 870 → rapport de test dans `docs/` — **en attente de matériel**
+- [x] M3.11 Tag `v0.2-m3` — CI verte (run 42962470543) + release workflow validé (run 42962696046) : GitHub Release `v0.2-m3` avec `miflash-linux-x64.tar.gz`, `miflash-linux-arm64.tar.gz`, `SHA256SUMS`
 
 > Tests d'intégration sans matériel (RNF-5) : `ScriptedEdlDevice` simule une cible
 > 9008 (HELLO → READ DATA → DONE, ACK/NAK firehose, NAK d'auth NoAuth, peek
