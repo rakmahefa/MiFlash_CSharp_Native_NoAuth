@@ -12,12 +12,10 @@ using Xunit;
 
 namespace MiFlash.Core.Tests;
 
-/// <summary>
-/// Tests d'intégration du moteur EDL (M3.1–M3.8) contre le simulateur
-/// ScriptedEdlDevice — sans matériel (RNF-5) : téléversement Sahara,
-/// configure + peek CPUID → re-Sahara DDR, setbootable, rawprogram/patch,
-/// partial_reset, et le flux d'authentification NoAuth.
-/// </summary>
+/// <summary>Collection xUnit partagée avec MultiDeviceFlasherTests :
+/// FlashStatus.Reporter est statique — ces classes ne doivent pas tourner
+/// en parallèle (elles se l'échangeraient en cours de test).</summary>
+[Collection("flash-status")]
 public class EdlFlasherTests : IDisposable
 {
     private readonly string _tempDir;
@@ -145,7 +143,7 @@ public class EdlFlasherTests : IDisposable
         Assert.Equal(0xCD, bootData[0]);
 
         // Statut final.
-        Assert.Contains("success:flash done", _statusLog);
+        Assert.Contains(_statusLog, s => s == "success:flash done");
     }
 
     [Fact]
@@ -198,6 +196,193 @@ public class EdlFlasherTests : IDisposable
     {
         (EdlFlasher flasher, _) = CreateFlasher();
         Assert.Throws<System.Exception>(() => flasher.SaharaDownloadProgrammer(0));
+    }
+
+    [Fact]
+    public void Provision_backup_restore_full_flow()
+    {
+        // M3.4/M3.5 : paquet avec provision.xml, rawprogram_backup.xml et
+        // rawprogram_restore.xml. La cible annonce quick_reset (partial_reset).
+        CreateImage("prog_ufs_firehose_sm8550.elf", 8192, 0x7F);
+        CreateImage("boot.img", 4096, 0xCD);
+        File.WriteAllText(Path.Combine(_tempDir, "rawprogram0.xml"),
+            "<?xml version=\"1.0\" ?>\n<data>\n" +
+            "  <program filename=\"boot.img\" label=\"boot\" num_partition_sectors=\"1\"" +
+            " physical_partition_number=\"0\" start_sector=\"0\" sparse=\"false\"" +
+            " file_sector_offset=\"0\" sector_size_in_bytes=\"4096\"/>\n" +
+            "</data>\n");
+        File.WriteAllText(Path.Combine(_tempDir, "patch0.xml"),
+            "<?xml version=\"1.0\" ?>\n<patches>\n" +
+            "  <patch filename=\"DISK\" sector_size_in_bytes=\"4096\" byte_offset=\"4\"" +
+            " physical_partition_number=\"0\" size_in_bytes=\"4\" start_sector=\"0\" value=\"0x11223344\" what=\"Update\"/>\n" +
+            "</patches>\n");
+        File.WriteAllText(Path.Combine(_tempDir, "provision.xml"),
+            "<?xml version=\"1.0\" ?>\n<data>\n" +
+            "  <ufs LUNum=\"0\" bBootEn=\"0\" bSize=\"0\" bMemType=\"0\" desc=\"LU0\"/>\n" +
+            "  <ufs LUNum=\"1\" bBootEn=\"0\" bSize=\"0\" bMemType=\"2\" desc=\"LU1 write boosted\"/>\n" +
+            "</data>\n");
+        File.WriteAllText(Path.Combine(_tempDir, "rawprogram_backup.xml"),
+            "<?xml version=\"1.0\" ?>\n<data>\n" +
+            "  <program filename=\"persist.img\" label=\"persist\" num_partition_sectors=\"1\"" +
+            " physical_partition_number=\"0\" start_sector=\"1024\" sparse=\"false\"" +
+            " file_sector_offset=\"0\" sector_size_in_bytes=\"4096\" size_in_kb=\"4\"/>\n" +
+            "</data>\n");
+        File.WriteAllText(Path.Combine(_tempDir, "rawprogram_restore.xml"),
+            "<?xml version=\"1.0\" ?>\n<data>\n" +
+            "  <program filename=\"persist.img\" label=\"persist\" num_partition_sectors=\"1\"" +
+            " physical_partition_number=\"0\" start_sector=\"1024\" sparse=\"false\"" +
+            " file_sector_offset=\"0\" sector_size_in_bytes=\"4096\"/>\n" +
+            "</data>\n");
+
+        var device = new ScriptedEdlDevice { ProgrammerSize = 8192, SupportsQuickReset = true, ReadDataSize = 4096, ReadDataFill = 0xAB };
+        device.Open();
+        string xdgRoot = Path.Combine(_tempDir, "xdg-data");
+        var flasher = new EdlFlasher(device.PortName, _tempDir, device) { RestoreRoot = xdgRoot };
+
+        flasher.Flash();
+
+        // M3.4 — la sauvegarde a été écrite dans le répertoire XDG de session.
+        string backupFile = Path.Combine(flasher.RestoreDirectory, "persist.img");
+        Assert.True(File.Exists(backupFile), "persist.img doit être sauvegardé : " + backupFile);
+        byte[] backed = File.ReadAllBytes(backupFile);
+        Assert.Equal(4096, backed.Length);
+        Assert.All(backed, b => Assert.Equal(0xAB, b));
+
+        string allXml = string.Join("\n", device.HostWrites
+            .Where(w => w.Length > 5 && w[0] == (byte)'<' && w[1] == (byte)'?')
+            .Select(w => Encoding.UTF8.GetString(w)));
+
+        // M3.5 — chaque <ufs> est renvoyé sans desc, avec verbose (défaut).
+        Assert.Equal(2, allXml.Split("<ufs ").Length - 1);
+        Assert.Contains("LUNum=\"0\"", allXml);
+        Assert.Contains("bMemType=\"2\"", allXml);
+        Assert.DoesNotContain("desc=", allXml);
+        Assert.Contains("verbose=\"1\"", allXml);
+        // Provision → partial_reset (quick_reset) → re-configure avec
+        // SkipStorageInit=0 après le provision.
+        Assert.Contains("SkipStorageInit=\"1\"", allXml);
+        Assert.Contains("SkipStorageInit=\"0\"", allXml);
+        int partialResets = allXml.Split("partial_reset").Length - 1;
+        Assert.True(partialResets >= 2, "partial_reset attendu après provision ET en fin de flash");
+
+        // M3.4 — restauration : rawprogram0 (boot.img 0xCD) + restore
+        // (persist.img 0xAB depuis le répertoire de sauvegarde).
+        Assert.Equal(2, allXml.Split("<program ").Length - 1);
+        byte[][] dataWrites = device.HostWrites.Where(w => w.Length > 5 && w[0] != (byte)'<' && w.Length % 4096 == 0 && w.Length >= 4096 && !LooksLikeSahara(w)).ToArray();
+        Assert.Contains(dataWrites, w => w[0] == 0xAB && w.All(b => b == 0xAB));
+        Assert.Contains(dataWrites, w => w[0] == 0xCD);
+
+        // Statuts : provisioning vu, flash final en succès.
+        Assert.Contains(_statusLog, s => s.Contains("provisioning:"));
+        Assert.Contains(_statusLog, s => s == "success:flash done");
+    }
+
+    [Fact]
+    public void Firmwarewrite_matches_ffu_by_storageinfo_and_writes_file()
+    {
+        // M3.8 — GETSTORAGEINFO → inquiry UFS → FFU correspondant écrit.
+        var device = new ScriptedEdlDevice();
+        device.Open();
+        DrainHello(device);
+        var flasher = new EdlFlasher(device.PortName, _tempDir, device) { FfuDirectory = _tempDir };
+        // État post-Sahara/post-configure (ici sautés car test unitaire).
+        flasher.comm.intSectorSize = 4096;
+        flasher.comm.m_dwBufferSectors = 256;
+        CreateImage("ffu_test.bin", 2048, 0x5A);
+        flasher.FfuList.Add(new Models.Ffu
+        {
+            Name = "MNVNNX4Q",
+            Version = "1ABCDEFGHIJKLMNO",
+            Number = "1234",
+            File = "ffu_test.bin",
+        });
+
+        bool ok = flasher.Firmwarewrite();
+
+        Assert.True(ok);
+        string allXml = string.Join("\n", device.HostWrites
+            .Where(w => w.Length > 5 && w[0] == (byte)'<' && w[1] == (byte)'?')
+            .Select(w => Encoding.UTF8.GetString(w)));
+        Assert.Contains("<getStorageInfo", allXml);
+        Assert.Contains("<firmwarewrite", allXml);
+        // Écriture FFU complétée au secteur plein : données du fichier + padding.
+        byte[] expected = File.ReadAllBytes(Path.Combine(_tempDir, "ffu_test.bin"));
+        byte[] ffuData = device.HostWrites.FirstOrDefault(w => w.Length == 4096 && w[0] == 0x5A);
+        Assert.NotNull(ffuData);
+        Assert.Equal(expected, ffuData.Take(expected.Length).ToArray());
+    }
+
+    [Fact]
+    public void Firmwarewrite_without_match_skips_write()
+    {
+        var device = new ScriptedEdlDevice();
+        device.Open();
+        DrainHello(device);
+        var flasher = new EdlFlasher(device.PortName, _tempDir, device) { FfuDirectory = _tempDir };
+        flasher.comm.intSectorSize = 4096; // normalement posé par Sahara (4096 UFS)
+        flasher.comm.m_dwBufferSectors = 256;
+        flasher.FfuList.Add(new Models.Ffu
+        {
+            Name = "ZZZZZZZZ",
+            Version = "unmatched00000000",
+            Number = "9999",
+            File = "nope.bin",
+        });
+
+        bool ok = flasher.Firmwarewrite();
+
+        Assert.True(ok);
+        Assert.DoesNotContain(device.HostWrites, w => w.Length > 5 && w[0] == (byte)'<'
+            && Encoding.UTF8.GetString(w).Contains("<firmwarewrite"));
+    }
+
+    [Fact]
+    public void GetSha256Digest_requests_digest_per_program()
+    {
+        CreateImage("boot.img", 4096, 0xCD);
+        CreateImage("system.img", 8192, 0xCE);
+        File.WriteAllText(Path.Combine(_tempDir, "rawprogram0.xml"),
+            "<?xml version=\"1.0\" ?>\n<data>\n" +
+            "  <program filename=\"boot.img\" label=\"boot\" num_partition_sectors=\"1\"" +
+            " physical_partition_number=\"0\" start_sector=\"0\" sparse=\"false\"" +
+            " file_sector_offset=\"0\" sector_size_in_bytes=\"4096\"/>\n" +
+            "  <program filename=\"system.img\" label=\"system\" num_partition_sectors=\"2\"" +
+            " physical_partition_number=\"1\" start_sector=\"64\" sparse=\"false\"" +
+            " file_sector_offset=\"0\" sector_size_in_bytes=\"4096\"/>\n" +
+            "</data>\n");
+
+        var device = new ScriptedEdlDevice();
+        device.Open();
+        DrainHello(device);
+        var flasher = new EdlFlasher(device.PortName, _tempDir, device);
+
+        flasher.GetSha256Digest(_tempDir, Path.Combine(_tempDir, "rawprogram0.xml"));
+
+        string allXml = string.Join("\n", device.HostWrites
+            .Where(w => w.Length > 5 && w[0] == (byte)'<' && w[1] == (byte)'?')
+            .Select(w => Encoding.UTF8.GetString(w)));
+        Assert.Equal(2, allXml.Split("<getsha256digest").Length - 1);
+        Assert.Contains("SECTOR_SIZE_IN_BYTES=\"4096\"", allXml);
+        Assert.Contains("start_sector=\"64\"", allXml);
+        Assert.Contains("physical_partition_number=\"1\"", allXml);
+    }
+
+    /// <summary>Écarte les paquets structurés Sahara (commande ≠ 0) des
+    /// écritures de données images.</summary>
+    private static bool LooksLikeSahara(byte[] write)
+    {
+        // Les données images commencent par le contenu du fichier ; les
+        // paquets Sahara commencent par une commande uint32 petite (1..7).
+        uint cmd = BitConverter.ToUInt32(write, 0);
+        return cmd is >= 1 and <= 7;
+    }
+
+    /// <summary>Vide le HELLO initial du simulateur (consommé par Sahara
+    /// dans le flux réel — sinon les commandes autonomes le parsent).</summary>
+    private static void DrainHello(ScriptedEdlDevice device)
+    {
+        var sink = new byte[64];
+        device.Read(sink, 0, device.BytesToRead);
     }
 
     [Fact]

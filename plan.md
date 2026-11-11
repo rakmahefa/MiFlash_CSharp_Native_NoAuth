@@ -111,7 +111,10 @@
 ## 4. Organisation Git / CI
 
 - `dev` : branche d'intégration (déjà créée) ; `feat/*` → PR → `dev` ; `main` reçoit les merges taggés.
-- CI : build + tests (ubuntu-latest, .NET 8) ; lint `dotnet format` ; artefact tarball par commit.
+- CI (`ci.yml`) : build + tests (ubuntu-latest, .NET 8) ; lint `dotnet format` ; artefact tarball par commit.
+- Release (`release.yml`, M0.6) : tag `v*` → tests + `dotnet publish` self-contained
+  linux-x64 **et** linux-arm64 → tarballs + `SHA256SUMS` → GitHub Release avec artefacts
+  (udev rules et README-linux inclus dans chaque tarball).
 - Chaque jalon = tag `v0.x-mN` sur `dev` une fois ses critères d'acceptation (spec §8) passés.
 
 ## 5. Planning consolidé

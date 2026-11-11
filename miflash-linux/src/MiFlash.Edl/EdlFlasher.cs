@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Xml;
@@ -6,6 +7,7 @@ using MiFlash.Core.Auth;
 using MiFlash.Core.Firehose;
 using MiFlash.Core.Images;
 using MiFlash.Core.Io;
+using MiFlash.Core.Models;
 using MiFlash.Core.Protocol;
 using MiFlash.Core.Runtime;
 using MiFlash.Core.Sahara;
@@ -15,16 +17,19 @@ using MiFlash.Core.Transport;
 namespace MiFlash.Edl;
 
 /// <summary>
-/// Moteur EDL complet (M3) — port de <c>SerialPortDevice.cs</c> (l. 45–575,
-/// 973–1336, 1448–1530). Séquence : Sahara (téléversement du programmer avec
-/// récupération « switch mode back ») → ping firehose → configure DDR
-/// (+ auth NoAuth via <see cref="IEdlAuthenticator"/> si le loader exige
-/// <c>sig</c>) → peek CPUID (choix DDR4/5 si nécessaire) →
+/// Moteur EDL complet (M3) — port de <c>SerialPortDevice.cs</c> (l. 45–235,
+/// 577–971, 973–1336, 1338–1547). Séquence : Sahara (téléversement du
+/// programmer avec récupération « switch mode back ») → ping firehose →
+/// configure DDR (+ auth NoAuth via <see cref="IEdlAuthenticator"/> si le
+/// loader exige <c>sig</c>) → peek CPUID (choix DDR4/5 si nécessaire) →
+/// backup → provision (+partial_reset ou re-Sahara) → firmwarewrite →
 /// <c>setbootablestoragedrive</c> (UFS) → rawprogram*.xml + patch*.xml →
-/// <c>partial_reset</c>.
+/// restore → <c>partial_reset</c>.
 /// Écarts v1 documentés : moteur synchrone (Thread.Sleep, fidèle à
-/// l'original — async reporté au durcissement M6) ; backup/provision/
-/// firmwarewrite/report SHA-256 au prochain passage (todo M3.4/M3.5/M3.8).
+/// l'original — async reporté au durcissement M6) ; <c>uploadDebugpolicy()</c>
+/// (usine, <c>MiFlashGlobal.IsFactory</c>) est un no-op hors périmètre v1 ;
+/// <c>SaveFfu.ffuList</c>/<c>MiAppConfig</c> remplacés par
+/// <see cref="FfuList"/>/<see cref="FfuDirectory"/> (XDG).
 /// </summary>
 public sealed class EdlFlasher
 {
@@ -41,6 +46,41 @@ public sealed class EdlFlasher
     public bool isLite;
 
     private int m_iSkipStorageInit;
+
+    private bool needFirmwarewrite;
+
+    private bool needRestoreRom;
+
+    private DateTime startTime = DateTime.Now;
+
+    /// <summary>Port de <c>MiFlashGlobal.IsFirmwarewrite</c> : exécute l'étape
+    /// <c>Firmwarewrite</c> (match FFU) dans la boucle de flash.</summary>
+    public bool IsFirmwarewrite;
+
+    /// <summary>Port de <c>SaveFfu.ffuList</c> : FFU candidats au firmwarewrite
+    /// (Name/Version/Number comparés au storageinfo de la cible).</summary>
+    public List<Ffu> FfuList { get; set; } = new();
+
+    /// <summary>Port de <c>MiAppConfig.Get("ffuPath")</c> : répertoire des
+    /// fichiers FFU (défaut XDG <c>~/.local/share/miflash/ffu</c>).</summary>
+    public string FfuDirectory { get; set; } = "";
+
+    /// <summary>Fichier unique à vérifier par SHA-256 (sinon tous les
+    /// rawprogram*.xml) — champ <c>sha256Path</c> de l'original.</summary>
+    public string sha256Path = "";
+
+    /// <summary>Racine des sauvegardes : défaut XDG
+    /// <c>~/.local/share/miflash</c>, surchargeable (tests, option CLI
+    /// <c>--backup-dir</c> prévue en M4).</summary>
+    public string RestoreRoot { get; set; } = "";
+
+    /// <summary>Répertoire de sauvegarde/restauration de session :
+    /// <c>&lt;RestoreRoot&gt;/restore/&lt;yyyyMdHms&gt;_&lt;chipNum&gt;</c> —
+    /// remplace <c>AppDomain…ApplicationBase + "restore\\…" + chipNum</c>
+    /// (ReadFilesFromDevice l.1112, XiaomiFlashNew l.209).</summary>
+    public string RestoreDirectory => Path.Combine(
+        string.IsNullOrEmpty(RestoreRoot) ? AppPaths.DataRoot : RestoreRoot,
+        "restore", startTime.ToString("yyyyMdHms") + "_" + comm.chipNum);
 
     public bool verbose = true;
 
@@ -62,7 +102,11 @@ public sealed class EdlFlasher
         comm = new Comm(transport ?? throw new ArgumentNullException(nameof(transport)));
     }
 
-    /// <summary>Point d'entrée : flashe le répertoire d'images (RF-3→RF-11).</summary>
+    /// <summary>Point d'entrée : flashe le répertoire d'images (RF-3→RF-11) —
+    /// port fidèle de <c>XiaomiFlashNew()</c> (l. 117–235) : boucle
+    /// ping/configure → backup → provision (+partial_reset ou re-Sahara) →
+    /// firmwarewrite, puis setbootablestoragedrive (UFS), rawprogram/patch,
+    /// restore et partial_reset final.</summary>
     public void Flash()
     {
         if (string.IsNullOrEmpty(deviceName))
@@ -86,12 +130,13 @@ public sealed class EdlFlasher
         {
             m_iSkipStorageInit = 1;
         }
+        startTime = DateTime.Now;
         try
         {
             comm.StartReading();
             SaharaDownloadProgrammer(programmerName);
             comm.StopReading();
-            Thread.Sleep(1000);
+            Thread.Sleep(TIME_WAIT_FIREHOSE_START);
             Ping();
             ConfigureDDR(comm.intSectorSize, BUFFER_SECTORS, storageType, m_iSkipStorageInit);
 
@@ -115,11 +160,81 @@ public sealed class EdlFlasher
                 }
             }
 
+            // Boucle provision/firmwarewrite (XiaomiFlashNew l.132–201). Le
+            // ping+configure d'entrée tient lieu d'itération 1 (le peek DDR a
+            // dû être fait avant) : firstPass saute le re-ping initial.
+            bool firstPass = true;
+            while (true)
+            {
+                if (!firstPass)
+                {
+                    Ping();
+                    ConfigureDDR(comm.intSectorSize, BUFFER_SECTORS, storageType, m_iSkipStorageInit);
+                }
+                firstPass = false;
+                if (!needRestoreRom)
+                {
+                    needRestoreRom = true;
+                    BackupRom();
+                }
+                if (!NeedProvision(swPath))
+                {
+                    break;
+                }
+                Provision(swPath);
+                Thread.Sleep(5000);
+                if (comm.isSupportPartialReset)
+                {
+                    Log.w(comm.PortName, "Partial_Reset target");
+                    PartialReset();
+                }
+                else
+                {
+                    Log.w(comm.PortName, "Reset_To_Edl target");
+                    ResetToEdl();
+                    SaharaDownloadProgrammer(programmerName);
+                    Thread.Sleep(TIME_WAIT_FIREHOSE_START);
+                }
+                Ping();
+                m_iSkipStorageInit = 0;
+                // uploadDebugpolicy() : usine uniquement (MiFlashGlobal.
+                // IsFactory, FactoryCtrl) — hors périmètre v1, no-op.
+                ConfigureDDR(comm.intSectorSize, BUFFER_SECTORS, storageType, m_iSkipStorageInit);
+                if (!IsFirmwarewrite)
+                {
+                    break;
+                }
+                Log.w(comm.PortName, "do firmwarewrite");
+                Firmwarewrite();
+                if (!needFirmwarewrite)
+                {
+                    break;
+                }
+                if (comm.isSupportPartialReset)
+                {
+                    PartialReset();
+                    continue;
+                }
+                ResetToEdl();
+                SaharaDownloadProgrammer(programmerName);
+                Thread.Sleep(TIME_WAIT_FIREHOSE_START);
+            }
+
             if (storageType == Storage.ufs)
             {
                 SetBootPartition();
             }
             FirehoseDownloadImg(swPath);
+            if (NeedRestoreRom(swPath))
+            {
+                string text2 = RestoreDirectory;
+                Log.w(comm.PortName, "restoreImagePath:" + text2);
+                string[] array = FileSearcher.SearchFiles(swPath, SoftwareImage.RawRestorePattern);
+                for (int i = 0; i < array.Length; i++)
+                {
+                    WriteFilesToDevice(text2, array[i]);
+                }
+            }
             PartialReset();
             FlashStatus.UpdateDeviceStatus(deviceName, 1f, "flash done", "success", isDone: true);
         }
@@ -648,6 +763,339 @@ public sealed class EdlFlasher
     public bool NeedProvision(string swpath)
     {
         return FileSearcher.SearchFiles(swpath, SoftwareImage.ProvisionPattern).Length != 0;
+    }
+
+    /// <summary>rawprogram_backup.xml présent → sauvegarde avant provision
+    /// (NeedBackupRom l.740–749).</summary>
+    public bool NeedBackupRom(string swpath)
+    {
+        return FileSearcher.SearchFiles(swpath, SoftwareImage.RawBackupPattern).Length != 0;
+    }
+
+    /// <summary>rawprogram_restore.xml présent → restauration après flash
+    /// (NeedRestoreRom l.751–760).</summary>
+    public bool NeedRestoreRom(string swpath)
+    {
+        return FileSearcher.SearchFiles(swpath, SoftwareImage.RawRestorePattern).Length != 0;
+    }
+
+    // ------------------------------------------- Backup / restore (M3.4) ----
+
+    /// <summary>Sauvegarde les partitions listées par rawprogram_backup.xml
+    /// vers <see cref="RestoreDirectory"/> (BackupRom l.1537–1547).</summary>
+    public void BackupRom()
+    {
+        if (NeedBackupRom(swPath))
+        {
+            string[] array = FileSearcher.SearchFiles(swPath, SoftwareImage.RawBackupPattern);
+            for (int i = 0; i < array.Length; i++)
+            {
+                ReadFilesFromDevice(swPath, array[i]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Lit les partitions décrites par un rawprogram de sauvegarde et écrit
+    /// les images dans <see cref="RestoreDirectory"/> — port de
+    /// ReadFilesFromDevice l.1042–1136. Le sparse n'est pas supporté en
+    /// lecture (comme l'original).
+    /// </summary>
+    public bool ReadFilesFromDevice(string swPath, string rawFilePath)
+    {
+        bool result = true;
+        Log.w(comm.PortName, "open program file " + rawFilePath);
+        FlashStatus.UpdateDeviceStatus(comm.PortName, null, rawFilePath, "flashing", isDone: false);
+        var xmlDocument = new XmlDocument();
+        using var xmlReader = XmlReader.Create(rawFilePath, new XmlReaderSettings { IgnoreComments = true });
+        xmlDocument.Load(xmlReader);
+        XmlNodeList childNodes = xmlDocument.SelectSingleNode("data").ChildNodes;
+        bool is_sparse = false;
+        string filename = "";
+        string file_sector_offset = "0";
+        string start_sector = "0";
+        string num_partition_sectors = "0";
+        string physical_partition_number = "0";
+        string sector_size_in_bytes = "512";
+        string label = "";
+        string size_in_kb = "0";
+        foreach (XmlNode item in childNodes)
+        {
+            if (item.Name.ToLowerInvariant() != "program")
+            {
+                continue;
+            }
+            foreach (XmlAttribute attribute in item.Attributes)
+            {
+                switch (attribute.Name.ToLowerInvariant())
+                {
+                    case "file_sector_offset":
+                        file_sector_offset = attribute.Value;
+                        break;
+                    case "filename":
+                        filename = attribute.Value;
+                        break;
+                    case "num_partition_sectors":
+                        num_partition_sectors = attribute.Value;
+                        break;
+                    case "start_sector":
+                        start_sector = attribute.Value;
+                        break;
+                    case "sparse":
+                        is_sparse = attribute.Value == "true";
+                        break;
+                    case "sector_size_in_bytes":
+                        sector_size_in_bytes = attribute.Value;
+                        break;
+                    case "physical_partition_number":
+                        physical_partition_number = attribute.Value;
+                        break;
+                    case "label":
+                        label = attribute.Value;
+                        break;
+                    case "size_in_kb":
+                        size_in_kb = attribute.Value;
+                        break;
+                }
+            }
+            comm.CleanBuffer();
+            string addtionalFirehose = readBackVerify ? "read_back_verify=\"1\"" : "";
+            DateTime now = DateTime.Now;
+            filename = Path.Combine(RestoreDirectory, filename);
+            if (is_sparse)
+            {
+                Log.w(comm.PortName, "nou support read sparse file " + filename);
+                throw new Exception("nou support read sparse file " + filename);
+            }
+            Log.w(comm.PortName, "Read file " + filename + " from partition[" + label + "] sector " + start_sector);
+            using (var fileTransfer = new FileTransfer(comm.PortName, filename, isWriteFile: true))
+            {
+                fileTransfer.ReadFile(comm, start_sector, num_partition_sectors, filename, file_sector_offset, size_in_kb, "0", sector_size_in_bytes, physical_partition_number, addtionalFirehose, chkAck: true, 1);
+            }
+            Log.w(comm.PortName, "Image " + filename + " transferred successfully,elapse " + (DateTime.Now - now));
+        }
+        return result;
+    }
+
+    // ------------------------------------------------ Provision (M3.5) ----
+
+    /// <summary>
+    /// Provisionne la cible : chaque élément <c>&lt;ufs&gt;</c> du
+    /// provision*.xml est renvoyé au loader comme commande firehose (sans
+    /// l'attribut <c>desc</c>) — port de Provision l.792–853.
+    /// </summary>
+    public bool Provision(string swpath)
+    {
+        string[] array = FileSearcher.SearchFiles(swpath, SoftwareImage.ProvisionPattern);
+        if (array.Length == 0)
+        {
+            return false;
+        }
+        string text = array[0];
+        Log.w(comm.PortName, "start provision:" + text);
+        var xmlDocument = new XmlDocument();
+        using var xmlReader = XmlReader.Create(text, new XmlReaderSettings { IgnoreComments = true });
+        xmlDocument.Load(xmlReader);
+        XmlNodeList childNodes = xmlDocument.SelectSingleNode("data").ChildNodes;
+        int num = 0;
+        foreach (XmlNode item in childNodes)
+        {
+            if (item.Name.ToLowerInvariant() != "ufs")
+            {
+                continue;
+            }
+            var stringBuilder = new System.Text.StringBuilder("<ufs ");
+            foreach (XmlAttribute attribute in item.Attributes)
+            {
+                if (!(attribute.Name.ToLowerInvariant() == "desc"))
+                {
+                    stringBuilder.Append(attribute.Name + "=\"" + attribute.Value + "\" ");
+                }
+            }
+            if (verbose)
+            {
+                stringBuilder.Append(" verbose=\"1\" ");
+            }
+            stringBuilder.Append("/>");
+            string text2 = "<?xml version=\"1.0\" ?>\n<data>\n" + stringBuilder.ToString() + "\n</data>";
+            if (!comm.SendCommand(text2, checkAck: true))
+            {
+                Log.w(comm.PortName, "Provision failed :" + text2);
+                throw new Exception("Provision failed");
+            }
+            FlashStatus.UpdateDeviceStatus(comm.PortName, (float)num / (float)childNodes.Count, text, "provisioning", isDone: false);
+            num++;
+        }
+        Log.w(comm.PortName, "Provision done.");
+        FlashStatus.UpdateDeviceStatus(comm.PortName, 1f, "provisiong done", "provisioning", isDone: false);
+        return true;
+    }
+
+    // ------------------------------------- Firmwarewrite / SHA-256 (M3.8) ----
+
+    /// <summary>
+    /// Écrit le FFU correspondant au storageinfo de la cible — port de
+    /// Firmwarewrite l.855–913. <c>SaveFfu.ffuList</c> (config usine
+    /// Windows) devient <see cref="FfuList"/> ; <c>MiAppConfig.Get("ffuPath")</c>
+    /// devient <see cref="FfuDirectory"/> (défaut XDG <c>…/miflash/ffu</c>).
+    /// </summary>
+    public bool Firmwarewrite()
+    {
+        needFirmwarewrite = false;
+        string command = string.Format(FirehoseCommands.GETSTORAGEINFO);
+        string text = "";
+        if (!comm.SendCommand(command, checkAck: true))
+        {
+            throw new Exception("ffu getstorageinfo fail");
+        }
+        Log.w(comm.PortName, "storageInfo:" + comm.storageInfo);
+        string text2 = comm.storageInfo.Split(':')[2].Trim();
+        string text3 = text2.Substring(0, 8).Trim();
+        string text4 = text2.Substring(8, 16).Trim();
+        string text5 = text2.Substring(24, 4).Trim();
+        Log.w(comm.PortName, "name:" + text3 + " version:" + text4 + " number:" + text5);
+        foreach (Ffu ffu in FfuList)
+        {
+            if (ffu.Name == text3 && ffu.Version == text4 && ffu.Number == text5)
+            {
+                text = ffu.File;
+                needFirmwarewrite = true;
+                break;
+            }
+        }
+        Log.w(comm.PortName, "needFirmwarewrite: " + needFirmwarewrite);
+        if (needFirmwarewrite && !string.IsNullOrEmpty(text))
+        {
+            string text6 = Path.Combine(
+                string.IsNullOrEmpty(FfuDirectory) ? Path.Combine(AppPaths.DataRoot, "ffu") : FfuDirectory, text);
+            const string strFileStartSector = "0";
+            const string text7 = "0";
+            const string strPartitionSectorNumber = "0";
+            const string physical_partition_number = "0";
+            const string sector_size = "1";
+            string addtionalFirehose = readBackVerify ? "read_back_verify=\"1\"" : "";
+            if (!File.Exists(text6))
+            {
+                throw new Exception("file " + text6 + " not found.");
+            }
+            Log.w(comm.PortName, "Write file " + text6 + "  sector " + text7);
+            using var fileTransfer = new FileTransfer(comm.PortName, text6);
+            fileTransfer.WriteFfuFile(comm, text7, strPartitionSectorNumber, text, strFileStartSector, "0", sector_size, physical_partition_number, addtionalFirehose, chkAck: true, 1);
+        }
+        return true;
+    }
+
+    /// <summary>Vérifie les SHA-256 des images flashées : tous les
+    /// rawprogram*.xml, ou <see cref="sha256Path"/> si défini (GetSha256
+    /// l.1024–1040).</summary>
+    public void GetSha256(string swPath)
+    {
+        if (string.IsNullOrEmpty(sha256Path))
+        {
+            string[] array = FileSearcher.SearchFiles(swPath, SoftwareImage.RawProgramPattern);
+            for (int i = 0; i < array.Length; i++)
+            {
+                Log.w(comm.PortName, "sha256 " + array[i]);
+                GetSha256Digest(swPath, array[i]);
+            }
+        }
+        else
+        {
+            Log.w(comm.PortName, "sha256 " + sha256Path);
+            GetSha256Digest(swPath, sha256Path);
+        }
+    }
+
+    /// <summary>Demande le digest SHA-256 de chaque <c>&lt;program&gt;</c> au
+    /// loader — port de GetSha256Digest l.1338–1446 (y compris la boucle de
+    /// scavage ACK/NAK post-réponse).</summary>
+    public void GetSha256Digest(string swPath, string rawFilePath)
+    {
+        Log.w(comm.PortName, "open file " + rawFilePath);
+        FlashStatus.UpdateDeviceStatus(comm.PortName, null, rawFilePath, "flashing", isDone: false);
+        var xmlDocument = new XmlDocument();
+        using var xmlReader = XmlReader.Create(rawFilePath, new XmlReaderSettings { IgnoreComments = true });
+        xmlDocument.Load(xmlReader);
+        XmlNodeList childNodes = xmlDocument.SelectSingleNode("data").ChildNodes;
+        string text = "";
+        string value = "0";
+        string text2 = "0";
+        string value2 = "0";
+        string value3 = "0";
+        string value4 = "512";
+        foreach (XmlNode item in childNodes)
+        {
+            if (item.Name.ToLowerInvariant() != "program")
+            {
+                continue;
+            }
+            foreach (XmlAttribute attribute in item.Attributes)
+            {
+                switch (attribute.Name.ToLowerInvariant())
+                {
+                    case "file_sector_offset":
+                        value = attribute.Value;
+                        break;
+                    case "filename":
+                        text = attribute.Value;
+                        break;
+                    case "num_partition_sectors":
+                        value2 = attribute.Value;
+                        break;
+                    case "start_sector":
+                        text2 = attribute.Value;
+                        break;
+                    case "sector_size_in_bytes":
+                        value4 = attribute.Value;
+                        break;
+                    case "physical_partition_number":
+                        value3 = attribute.Value;
+                        break;
+                }
+            }
+            if (string.IsNullOrEmpty(text))
+            {
+                continue;
+            }
+            long num = Convert.ToInt64(value2);
+            if (num == 0L)
+            {
+                num = 2147483647L;
+            }
+            long num2 = Convert.ToInt64(value4);
+            long num3 = Convert.ToInt64(value3);
+            Log.w(comm.PortName, "checking sha256 " + text);
+            FlashStatus.UpdateDeviceStatus(comm.PortName, null, "checking sha256 " + text, "checking sha256", isDone: false);
+            string command = string.Format(FirehoseCommands.FIREHOSE_SHA256DIGEST, num2, num, text2, num3);
+            if (comm.SendCommand(command, checkAck: true))
+            {
+                continue;
+            }
+            bool flag = false;
+            bool flag2 = false;
+            while (!flag2 && !flag)
+            {
+                foreach (XmlDocument item2 in comm.GetResponseXml(waiteACK: true))
+                {
+                    foreach (XmlNode childNode in item2.SelectSingleNode("data").ChildNodes)
+                    {
+                        foreach (XmlAttribute attribute2 in ((XmlElement)childNode).Attributes)
+                        {
+                            if (attribute2.Value.ToLowerInvariant() == "ack")
+                            {
+                                flag = true;
+                            }
+                            else if (attribute2.Value.ToLowerInvariant() == "nak")
+                            {
+                                flag2 = true;
+                            }
+                        }
+                    }
+                }
+                Thread.Sleep(50);
+                comm.GetResponseXml(waiteACK: false);
+            }
+        }
     }
 
     /// <summary>Vrai si les programmers DDR4 ET DDR5 sont présents (choix par peek CPUID).</summary>

@@ -33,6 +33,23 @@ public class ScriptedEdlDevice : ITransport
     /// <summary>Pattern renvoyé au peek CPUID : DDR4 ou DDR5.</summary>
     public string PeekResponse { get; set; } = "0xC3 0x00 0x40 0x10 ";
 
+    /// <summary>Taille des données renvoyées par une commande &lt;read&gt; (backup).</summary>
+    public int ReadDataSize { get; set; } = 4096;
+
+    /// <summary>Octet de remplissage des données &lt;read&gt;.</summary>
+    public byte ReadDataFill { get; set; } = 0xAB;
+
+    /// <summary>Log « UFS Inquiry Command Output » renvoyé au getStorageInfo
+    /// (Firmwarewrite) : format NAME(8)+VERSION(16)+NUMBER(4) = 28 caractères.</summary>
+    public string StorageInfoInquiry { get; set; } =
+        "INFO: UFS Inquiry Command Output: MNVNNX4Q1ABCDEFGHIJKLMNO1234";
+
+    /// <summary>Numéro de série émis dans les logs configure (chipNum).</summary>
+    public string ChipSerialLog { get; set; } = "(0123456789ABCDEF)";
+
+    /// <summary>Vrai → la cible annonce quick_reset (partial_reset supporté).</summary>
+    public bool SupportsQuickReset { get; set; }
+
     public bool IsOpen { get; private set; }
 
     public string PortName => "SIM9008";
@@ -165,6 +182,15 @@ public class ScriptedEdlDevice : ITransport
         if (xml.Contains("<configure"))
         {
             EnqueueText("<?xml version=\"1.0\" ?><data><response value=\"ACK\" MaxPayloadSizeToTargetInBytes=\"1048576\"/></data>");
+            // Logs réalistes : numéro de série + quick_reset éventuel.
+            if (!string.IsNullOrEmpty(ChipSerialLog))
+            {
+                EnqueueText("<?xml version=\"1.0\" ?><data><log value=\"Chip serial num " + ChipSerialLog + "\"/></data>");
+            }
+            if (SupportsQuickReset)
+            {
+                EnqueueText("<?xml version=\"1.0\" ?><data><log value=\"INFO: quick_reset supported\"/></data>");
+            }
         }
         else if (xml.Contains("<peek"))
         {
@@ -176,9 +202,26 @@ public class ScriptedEdlDevice : ITransport
             _awaitingAuthBlob = true;
             EnqueueText("<?xml version=\"1.0\" ?><data><response value=\"ACK\"/></data>");
         }
-        else if (xml.Contains("<program"))
+        else if (xml.Contains("<getStorageInfo"))
         {
-            // 1 chunk écrit → 2 ACK groupés (données + statut), cf. chkRspAck.
+            // Firmwarewrite : ACK + inquiry UFS (name/version/number).
+            EnqueueText("<?xml version=\"1.0\" ?><data><response value=\"ACK\"/><log value=\""
+                + StorageInfoInquiry + "\"/></data>");
+        }
+        else if (xml.Contains("<read "))
+        {
+            // Backup : ACK rawmode=true + données brutes + ACK rawmode=false
+            // (cf. FileTransfer.ReadFile — parsing du premier/mode dernier paquet).
+            EnqueueText("<?xml version=\"1.0\" ?><data><response value=\"ACK\" rawmode=\"true\"/></data>");
+            var data = new byte[ReadDataSize];
+            Array.Fill(data, ReadDataFill);
+            Enqueue(data);
+            EnqueueText("<?xml version=\"1.0\" ?><data><response value=\"ACK\" rawmode=\"false\"/></data>");
+        }
+        else if (xml.Contains("<program") || xml.Contains("<firmwarewrite"))
+        {
+            // 1 chunk écrit → 2 ACK groupés (données + statut), cf. chkRspAck
+            // (program ET firmwarewrite, tous deux chunkCount=1 → 2 ACK requis).
             EnqueueText("<?xml version=\"1.0\" ?><data><response value=\"ACK\"/></data>");
             EnqueueText("<?xml version=\"1.0\" ?><data><response value=\"ACK\"/></data>");
         }
@@ -190,7 +233,8 @@ public class ScriptedEdlDevice : ITransport
         }
         else
         {
-            // nop, setbootablestoragedrive, patch, partial_reset…
+            // nop, setbootablestoragedrive, patch, partial_reset, ufs
+            // (provision), getsha256digest, firmwarewrite…
             EnqueueText("<?xml version=\"1.0\" ?><data><response value=\"ACK\"/></data>");
         }
     }

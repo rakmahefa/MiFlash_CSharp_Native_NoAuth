@@ -1,0 +1,89 @@
+name: release
+
+# Release du portage Linux (complète ci.yml — plan.md M6.1 anticipé) :
+# sur un tag v* → tests, publish self-contained linux-x64 + linux-arm64,
+# tarballs + SHA256SUMS, puis GitHub Release avec les artefacts.
+# En workflow_dispatch (sans tag) : même build, artefacts téléversés au run.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  release:
+    name: build, test & release (.NET 8, linux-x64 + linux-arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore miflash-linux/MiFlash.Linux.sln
+
+      - name: Build (Release)
+        run: dotnet build miflash-linux/MiFlash.Linux.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test miflash-linux/MiFlash.Linux.sln -c Release --no-build
+
+      - name: Publish linux-x64 (self-contained)
+        run: >
+          dotnet publish miflash-linux/src/MiFlash.Cli
+          -c Release -r linux-x64 --self-contained true
+          -o artifacts/miflash-linux-x64
+
+      - name: Publish linux-arm64 (self-contained)
+        run: >
+          dotnet publish miflash-linux/src/MiFlash.Cli
+          -c Release -r linux-arm64 --self-contained true
+          -o artifacts/miflash-linux-arm64
+
+      - name: Stage bundles (udev rules + README + tarballs + sommes)
+        run: |
+          set -eu
+          for arch in x64 arm64; do
+            dir="artifacts/miflash-linux-${arch}"
+            mkdir -p "${dir}/packaging/udev"
+            cp packaging/udev/51-miflash.rules "${dir}/packaging/udev/"
+            cp README-linux.md "${dir}/"
+            chmod +x "${dir}/MiFlash.Cli" 2>/dev/null || true
+          done
+          tar -czf miflash-linux-x64.tar.gz -C artifacts miflash-linux-x64
+          tar -czf miflash-linux-arm64.tar.gz -C artifacts miflash-linux-arm64
+          sha256sum miflash-linux-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload run artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: miflash-linux-release-${{ github.sha }}
+          path: |
+            miflash-linux-x64.tar.gz
+            miflash-linux-arm64.tar.gz
+            SHA256SUMS
+          if-no-files-found: error
+
+      - name: Create GitHub Release (tags v* only)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          TAG="${GITHUB_REF_NAME}"
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release create "${TAG}" --title "miflash-linux ${TAG}" --generate-notes
+          fi
+          gh release upload "${TAG}" miflash-linux-x64.tar.gz miflash-linux-arm64.tar.gz SHA256SUMS --clobber

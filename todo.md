@@ -17,6 +17,7 @@
 - [x] M0.3 Créer la solution .NET 8 multi-projets : `MiFlash.Core`, `MiFlash.Edl`, `MiFlash.Transport.Usb`, `MiFlash.Transport.Serial`, `MiFlash.Fastboot`, `MiFlash.Cli` — commit `36f046d` (LibUsbDotNet 3.0.224, System.IO.Ports 9.0.0, Directory.Build.props, 3 tests fumée)
 - [x] M0.4 CI GitHub Actions (ubuntu-latest) : `dotnet build` + `dotnet test` + `dotnet format --verify-no-changes` + artefact publish linux-x64 — commit `cc44780` (`.github/workflows/ci.yml`)
 - [x] M0.5 README-linux (fr/en) : usage éducatif, avertissement, prérequis — commit `cc44780` (+ `miflash-linux/README.md` guide dev, `.editorconfig`)
+- [x] M0.6 Workflow release (`.github/workflows/release.yml`) : tag `v*` → tests + publish self-contained linux-x64/arm64 + tarballs + `SHA256SUMS` + GitHub Release avec artefacts ; `workflow_dispatch` pour build manuel — testé localement (publish + exécution `version`)
 
 ## M1 — MiFlash.Core (protocoles, OS-agnostique)
 
@@ -44,17 +45,21 @@
 - [x] M3.1 Porter `SaharaDownloadProgrammer` (avec boucle de récupération « switch mode back » l. 390–444) — `EdlFlasher.SaharaDownloadProgrammer()` (synchrone fidèle à l'original ; async reporté au durcissement M6)
 - [x] M3.2 `ConfigureDDR` + gestion `needEdlAuth` → `DlAuth()` via `IEdlAuthenticator`/`StaticBlobAuthenticator` (blob 256 o de `dlAuth()`)
 - [x] M3.3 Peek CPUID → sélection programmer lite/DDR4/DDR5 (`prog_firehose_lite.elf`, `prog_ufs_firehose_sm8250_ddr_4/5.elf`) + détection UFS/eMMC par nom de fichier + re-Sahara après `reset_to_edl` si le programmer détecté diffère
-- [ ] M3.4 `BackupRom` / restore (`rawprogram_backup/restore.xml`) + `NeedBackupRom/NeedRestoreRom` — prochain passage
-- [ ] M3.5 `Provision` (SkipStorageInit=1, partial_reset ou reset_to_edl + re-Sahara) — prochain passage (`NeedProvision` déjà porté, drapeau `m_iSkipStorageInit` câblé)
+- [x] M3.4 `BackupRom` / restore (`rawprogram_backup/restore.xml`) + `NeedBackupRom/NeedRestoreRom` — `BackupRom`/`ReadFilesFromDevice` (lectures `<read>` rawmode, répertoire session `RestoreDirectory` = `<RestoreRoot>/restore/<yyyyMdHms>_<chipNum>`, défaut XDG `~/.local/share/miflash`, surcharge `RestoreRoot` pour tests/CLI) ; restore intégré en fin de `Flash()` (écriture depuis le répertoire de sauvegarde)
+- [x] M3.5 `Provision` — éléments `<ufs>` renvoyés sans `desc` (+`verbose`), SkipStorageInit=1→0, boucle fidèle `XiaomiFlashNew` l.132–201 : partial_reset (quick_reset) ou reset_to_edl + re-Sahara, ping + re-configure après provision ; `uploadDebugpolicy` (usine) documenté no-op v1
 - [x] M3.6 `FirehoseDownloadImg` : rawprogram*.xml → programs par secteurs (sparse via `CekSparse` + `WriteSparseFileToDevice`, bruts via `WriteFile`), progression (`FlashStatus`)
 - [x] M3.7 `ApplyPatchesToDevice` : patch*.xml → `<patch>` (port fidèle l.1448–1530, correctifs « Fix Bugs at PATCH Operations » inclus)
-- [ ] M3.8 `GetSha256Digest`, `Firmwarewrite` — prochain passage ; ✅ `SetBootPartition` (UFS), `Reboot` (partial_reset/reset_to_edl portés)
-- [ ] M3.9 Multi-appareils parallèles (Task/appareil, CancellationToken, kill propre) — prochain passage
+- [x] M3.8 `GetSha256Digest` (+`GetSha256`), `Firmwarewrite` — `SaveFfu.ffuList`/`MiAppConfig` remplacés par `FfuList`/`FfuDirectory` (défaut XDG `…/miflash/ffu`), `MiFlashGlobal.IsFirmwarewrite` → propriété `IsFirmwarewrite` ; ✅ `SetBootPartition` (UFS), `Reboot` (partial_reset/reset_to_edl portés)
+- [x] M3.9 Multi-appareils parallèles — `MultiDeviceFlasher` (+`EdlJob`/`EdlJobResult`) : 1 Task/appareil, `MaxDegreeOfParallelism` (SemaphoreSlim, défaut 4), CancellationToken, un échec n'arrête pas les autres, résultats dans l'ordre de soumission
 - [ ] M3.10 Validation matérielle matrice README : SD 636 / 680 / 845 / 855 / 860 / 870 → rapport de test dans `docs/` — **en attente de matériel**
 
 > Tests d'intégration sans matériel (RNF-5) : `ScriptedEdlDevice` simule une cible
 > 9008 (HELLO → READ DATA → DONE, ACK/NAK firehose, NAK d'auth NoAuth, peek
-> DDR4/5) — 85 tests verts couvrant le flux complet M3.1→M3.8.
+> DDR4/5, read rawmode pour backup, getStorageInfo/inquiry UFS, quick_reset,
+> double ACK program/firmwarewrite) — **92 tests verts** couvrant le flux complet
+> M3.1→M3.9 (backup → provision → restore, firmwarewrite/FFU, sha256, parallèle).
+> ⚠ Le statut « provisioning » se vérifie par prédicat (`Assert.Contains(list, s => …)`) :
+> la surcharge `Contains(string, List<string>)` est une égalité exacte d'élément.
 
 ## M4 — CLI
 
