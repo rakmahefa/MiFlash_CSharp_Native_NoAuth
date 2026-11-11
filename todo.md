@@ -27,7 +27,7 @@
 - [x] M1.5 Remplacer `Encoding.Default` par UTF-8 explicite (audit : `Comm.SendCommand`) + abstractions `Log`/`FlashStatus` remplaçant `Log.cs`/`FlashingDevice` (UI-dépendants)
 - [x] M1.6 `AppPaths` XDG (`~/.local/share|state/miflash/`) remplaçant `AppDomain…ApplicationBase + "Source\\…"` — `Io/AppPaths.cs` (évalué à chaque accès, testable)
 - [x] M1.7 Tests unitaires : 64 tests verts — golden packets (HELLO 48 o, HELLO_RESPONSE v2/mode 3, READ DATA 32/64 bits), gabarits Firehose (configure/program/patch/auth), image sparse construite en test (RAW/FILL/DONTCARE), blob auth 256 o (SHA-256 + clone défensif), patterns `SoftwareImage`, comportements `Comm` via `FakeTransport` (ACK groupés, DDR4/5, chip serial, NAK 16384), XDG
-- [ ] M1.8 Tag `v0.1-m1` si CI verte
+- [x] M1.8 Tag `v0.1-m1` — CI verte (run 42951282098), tag poussé
 
 ## M2 — Transport USB (libusb) + détection
 
