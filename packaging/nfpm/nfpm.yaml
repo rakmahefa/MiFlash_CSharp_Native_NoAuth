@@ -1,0 +1,61 @@
+# MiFlash Linux — modèle de configuration nfpm (.deb + .rpm)
+#
+# Placeholders substitués par build-packages.sh (une config par format) :
+#   @@VERSION@@  version sans le « v » (ex. 1.0.0)
+#   @@ARCH@@     architecture native du format cible
+#                (deb : amd64 | arm64 — rpm : x86_64 | aarch64)
+#   @@DIR@@      répertoire de sortie dotnet publish self-contained
+#   @@LICDST@@   destination de la licence (convention deb « copyright »
+#                vs convention rpm /usr/share/licenses)
+#
+# Usage (via le script) :
+#   packaging/nfpm/build-packages.sh <version> <dir-x64> [dir-arm64]
+#
+# Documentation : https://nfpm.goreleaser.com/
+
+name: miflash-linux
+arch: "@@ARCH@@"
+platform: linux
+version: "@@VERSION@@"
+section: utils
+priority: optional
+maintainer: rakmahefa <rakmahefa@users.noreply.github.com>
+vendor: rakmahefa
+homepage: https://github.com/rakmahefa/MiFlash_CSharp_Native_NoAuth
+license: MIT
+description: |
+  Xiaomi MiFlash for Linux — native flashing tool for Qualcomm EDL (9008)
+  and fastboot. Self-contained .NET 8 CLI: devices, flash, backup, restore,
+  provision, reboot, flash-fastboot, doctor. Educational use, use at your
+  own risk.
+
+# Fichiers installés :
+#  - application self-contained dans /usr/lib/miflash-linux (≈210 fichiers)
+#  - lien /usr/bin/miflash vers l'exécutable
+#  - règles udev (accès sans root aux appareils 9008/fastboot)
+#  - licence + documentation
+contents:
+  # type:tree (nfpm ≥ 2.33) copie l'arborescence du publish SANS l'aplatir —
+  # indispensable : les assemblies satellites localisées (es/, de/, fr/…)
+  # portent toutes le même nom de fichier et entreraient en collision.
+  - src: "@@DIR@@"
+    dst: /usr/lib/miflash-linux
+    type: tree
+
+  - src: /usr/lib/miflash-linux/miflash
+    dst: /usr/bin/miflash
+    type: symlink
+
+  - src: packaging/udev/51-miflash.rules
+    dst: /usr/lib/udev/rules.d/51-miflash.rules
+
+  - src: LICENSE
+    dst: "@@LICDST@@"
+
+  - src: README-linux.md
+    dst: /usr/share/doc/miflash-linux/README-linux.md
+    type: doc
+
+scripts:
+  postinstall: packaging/nfpm/postinstall.sh
+  postremove: packaging/nfpm/postremove.sh

@@ -1,0 +1,13 @@
+# Hooks pacman pour miflash-linux (cf. packaging/aur/PKGBUILD).
+post_install() {
+    if command -v udevadm >/dev/null 2>&1; then
+        udevadm control --reload-rules || true
+        udevadm trigger --action=add || true
+    fi
+    echo '>>> miflash-linux installé : vérifiez votre environnement avec « miflash doctor »'
+    echo '>>> (re)branchez l’appareil pour appliquer les règles udev.'
+}
+
+post_upgrade() {
+    post_install
+}

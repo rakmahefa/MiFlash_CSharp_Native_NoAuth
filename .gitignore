@@ -38,3 +38,7 @@ logs/
 
 # Nouvelle solution Linux (miflash-linux) : ignorer seulement ses sorties,
 # pas les sources (couvert par bin/ obj/ ci-dessus)
+
+# Packaging local (M6.2) : sorties nfpm jamais commises
+*.deb
+*.rpm

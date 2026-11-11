@@ -4,10 +4,11 @@
   <PropertyGroup>
     <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- v0.1 : fidélité du portage d'abord ; activation de nullable planifiée
-         au durcissement (todo.md M6.5). -->
+    <!-- Nullable désactivé : le code est un portage fidèle d'une base WinForms
+         non annotée — l'activer générerait des centaines d'avertissements sans
+         valeur pour la conformité du port. Documenté comme écart v1 (M6.5). -->
     <Nullable>disable</Nullable>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
     <Authors>rakmahefa</Authors>
     <Product>MiFlash Linux</Product>
     <Description>Portage natif Linux de MiFlash (EDL Qualcomm 9008, NoAuth) — usage éducatif uniquement</Description>

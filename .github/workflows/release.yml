@@ -1,8 +1,8 @@
 name: release
 
-# Release du portage Linux (complète ci.yml — plan.md M6.1 anticipé) :
-# sur un tag v* → tests, publish self-contained linux-x64 + linux-arm64,
-# tarballs + SHA256SUMS, puis GitHub Release avec les artefacts.
+# Release du portage Linux (M0.6/M6.1/M6.2) : sur un tag v* → tests,
+# publish self-contained linux-x64 + linux-arm64, tarballs + paquets
+# .deb/.rpm (nfpm) + SHA256SUMS, puis GitHub Release avec les artefacts.
 # En workflow_dispatch (sans tag) : même build, artefacts téléversés au run.
 
 on:
@@ -51,6 +51,30 @@ jobs:
           -c Release -r linux-arm64 --self-contained true
           -o artifacts/miflash-linux-arm64
 
+      # nfpm (M6.2) : paquets .deb/.rpm par architecture — même version que le
+      # tag (sans « v ») ; en workflow_dispatch, repli « 0.0.0-dev » (branche).
+      - name: Install nfpm
+        run: |
+          set -eu
+          curl -sSL -o /tmp/nfpm.tar.gz \
+            https://github.com/goreleaser/nfpm/releases/download/v2.41.0/nfpm_2.41.0_Linux_x86_64.tar.gz
+          tar -xzf /tmp/nfpm.tar.gz -C /usr/local/bin nfpm
+          nfpm --version
+
+      - name: Build .deb / .rpm packages (nfpm)
+        run: |
+          set -eu
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "${VERSION}" in
+            [0-9]*) ;;
+            *) VERSION="0.0.0-dev" ;;
+          esac
+          echo "version des paquets : ${VERSION}"
+          chmod +x packaging/nfpm/build-packages.sh
+          packaging/nfpm/build-packages.sh "${VERSION}" \
+            "${PWD}/artifacts/miflash-linux-x64" \
+            "${PWD}/artifacts/miflash-linux-arm64"
+
       - name: Stage bundles (udev rules + README + tarballs + sommes)
         run: |
           set -eu
@@ -59,12 +83,12 @@ jobs:
             mkdir -p "${dir}/packaging/udev"
             cp packaging/udev/51-miflash.rules "${dir}/packaging/udev/"
             cp README-linux.md "${dir}/"
-            chmod +x "${dir}/MiFlash.Cli" 2>/dev/null || true
+            chmod +x "${dir}/miflash" 2>/dev/null || true
           done
           tar -czf miflash-linux-x64.tar.gz -C artifacts miflash-linux-x64
           tar -czf miflash-linux-arm64.tar.gz -C artifacts miflash-linux-arm64
-          sha256sum miflash-linux-*.tar.gz > SHA256SUMS
-          cat SHA256SUMS
+          sha256sum miflash-linux-*.tar.gz miflash-linux_*.deb miflash-linux-*.rpm \
+            | tee SHA256SUMS
 
       - name: Upload run artifacts
         uses: actions/upload-artifact@v4
@@ -73,6 +97,8 @@ jobs:
           path: |
             miflash-linux-x64.tar.gz
             miflash-linux-arm64.tar.gz
+            miflash-linux_*.deb
+            miflash-linux-*.rpm
             SHA256SUMS
           if-no-files-found: error
 
@@ -86,4 +112,7 @@ jobs:
           if ! gh release view "${TAG}" >/dev/null 2>&1; then
             gh release create "${TAG}" --title "miflash-linux ${TAG}" --generate-notes
           fi
-          gh release upload "${TAG}" miflash-linux-x64.tar.gz miflash-linux-arm64.tar.gz SHA256SUMS --clobber
+          gh release upload "${TAG}" \
+            miflash-linux-x64.tar.gz miflash-linux-arm64.tar.gz \
+            miflash-linux_*.deb miflash-linux-*.rpm \
+            SHA256SUMS --clobber

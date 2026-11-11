@@ -11,5 +11,5 @@ namespace MiFlash.Core;
 public static class MiFlashCore
 {
     /// <summary>Version du portage Linux (semver, alignée sur les jalons).</summary>
-    public const string Version = "0.2.0";
+    public const string Version = "1.0.0";
 }

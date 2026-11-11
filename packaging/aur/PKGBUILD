@@ -1,0 +1,56 @@
+# Maintainer: rakmahefa <rakmahefa@users.noreply.github.com>
+# PKGBUILD AUR pour miflash-linux — construit depuis le tag git du dépôt.
+# Publication : copier packaging/aur/{PKGBUILD,miflash-linux.install}
+# vers aur.archlinux.org/miflash-linux/ puis y mettre à jour pkgver/pkgrel
+# à chaque release.
+
+pkgname=miflash-linux
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Xiaomi MiFlash for Linux: native EDL (Qualcomm 9008) + fastboot flashing tool'
+arch=('x86_64' 'aarch64')
+url='https://github.com/rakmahefa/MiFlash_CSharp_Native_NoAuth'
+license=('MIT')
+depends=('gcc-libs')
+makedepends=('git' 'dotnet-sdk')
+install=miflash-linux.install
+options=('!strip')          # le binaire .NET self-contained ne doit pas être strippé
+source=("git+${url}.git#tag=v${pkgver}")
+sha256sums=('SKIP')         # source git épinglée par tag
+
+_repo='MiFlash_CSharp_Native_NoAuth'
+
+build() {
+    cd "${srcdir}/${_repo}"
+
+    local rid
+    case "$(uname -m)" in
+        x86_64)  rid='linux-x64'  ;;
+        aarch64) rid='linux-arm64' ;;
+        *)       error "architecture non prise en charge : $(uname -m)" ; return 1 ;;
+    esac
+
+    export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+    export DOTNET_CLI_HOME="${srcdir}/dotnet-home"
+
+    dotnet publish miflash-linux/src/MiFlash.Cli \
+        -c Release -r "${rid}" --self-contained true \
+        -o "${srcdir}/publish"
+}
+
+package() {
+    cd "${srcdir}/${_repo}"
+
+    # Application self-contained (~210 fichiers) + lien /usr/bin/miflash.
+    install -dm755 "${pkgdir}/usr/lib/miflash-linux"
+    cp -a "${srcdir}/publish/." "${pkgdir}/usr/lib/miflash-linux/"
+    chmod 755 "${pkgdir}/usr/lib/miflash-linux/miflash"
+    install -dm755 "${pkgdir}/usr/bin"
+    ln -s /usr/lib/miflash-linux/miflash "${pkgdir}/usr/bin/miflash"
+
+    # Licence + documentation + règles udev.
+    install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+    install -Dm644 README-linux.md "${pkgdir}/usr/share/doc/${pkgname}/README-linux.md"
+    install -Dm644 packaging/udev/51-miflash.rules \
+        "${pkgdir}/usr/lib/udev/rules.d/51-miflash.rules"
+}

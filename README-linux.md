@@ -18,11 +18,65 @@ distribués ici : vous devez fournir les vôtres.
 | M1 | `MiFlash.Core` : protocoles Sahara/Firehose, `ITransport`, auth NoAuth, tests golden | ✅ fait (tag `v0.1-m1`) |
 | M2 | Transport USB libusb (9008), udev, hotplug | ✅ fait (sauf test matériel M2.7) |
 | M3 | Moteur EDL complet (rawprogram/patch, provision, backup, multi-appareils) | ✅ fait (tag `v0.2-m3`, sauf matrice matérielle M3.10) |
-| M4 | CLI `miflash` | ✅ fait |
-| M5 | ROM fastboot (`flash_all*`) | ✅ fait (moteur natif .bat/.sh, timeout 11 min 40 s, Intel DNX) |
-| M6 | Packaging (deb/rpm/tarball), durcissement | ⏳ |
+| M4 | CLI `miflash` | ✅ fait (tag `v0.3-m5`) |
+| M5 | ROM fastboot (`flash_all*`) | ✅ fait (tag `v0.3-m5` : moteur natif .bat/.sh, timeout 11 min 40 s, Intel DNX) |
+| M6 | Packaging (deb/rpm/AUR/tarball), docs, audit | ✅ fait (tag `v1.0.0`) |
 
 Détails : [`spec-linux.md`](spec-linux.md) · [`plan.md`](plan.md) · [`todo.md`](todo.md).
+
+## Installation (v1.0.0+)
+
+Artefacts de chaque release : tarballs `linux-x64/arm64`, paquets `.deb` et
+`.rpm` (x86_64/aarch64), `SHA256SUMS`.
+
+**Debian / Ubuntu / dérivés** — téléchargez `miflash-linux_<version>_amd64.deb`
+puis :
+
+```bash
+sudo apt install ./miflash-linux_1.0.0_amd64.deb   # installe aussi les règles udev
+miflash doctor                                     # vérifie l'environnement
+```
+
+**Fedora / RHEL / openSUSE** — `miflash-linux-<version>.x86_64.rpm` :
+
+```bash
+sudo dnf install ./miflash-linux-1.0.0.x86_64.rpm
+```
+
+**Arch Linux (AUR)** — le [`PKGBUILD`](packaging/aur/PKGBUILD) construit
+depuis le tag git :
+
+```bash
+yay -S miflash-linux        # ou : git clone aur@aur.archlinux.org:miflash-linux.git
+```
+
+**Tarball (toute distribution)** :
+
+```bash
+tar -xzf miflash-linux-x64.tar.gz && cd miflash-linux-x64
+sudo cp packaging/udev/51-miflash.rules /usr/lib/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo ln -s "$PWD/miflash" /usr/local/bin/miflash
+```
+
+Les paquets installent l'application self-contained dans `/usr/lib/miflash-linux`
+avec un lien `/usr/bin/miflash`, les règles udev
+(`/usr/lib/udev/rules.d/51-miflash.rules`), puis rechargent udev
+automatiquement (postinstall). Aucune dépendance runtime n'est requise
+(.NET 8 embarqué) ; `fastboot` (paquet `android-tools`) reste optionnel pour
+`miflash flash-fastboot`.
+
+### Prérequis
+
+| Composant | Rôle | Obligatoire |
+|---|---|---|
+| libusb-1.0-0 | transport EDL 9008 | oui (détecté par `miflash doctor`) |
+| règles udev 51-miflash.rules | accès sans root aux 9008/fastboot | fortement conseillé (sinon `sudo`) |
+| fastboot (`android-tools`) | `miflash flash-fastboot` | pour les ROM fastboot uniquement |
+| loaders `prog_*_firehose_*.elf` | programmer firehose | à fournir dans le répertoire d'images |
+
+Vérification en une commande : `miflash doctor` (libusb, udev, fastboot,
+répertoires XDG, runtime).
 
 ## Utilisation du CLI (M4)
 
@@ -68,6 +122,37 @@ utilisateur dans `~/.config/miflash/LanguageLibrary.xml`.
 Codes de sortie : 0 succès · 1 échec/annulation · 2 erreur d'usage · 3 aucune
 cible EDL · 4 échec doctor.
 
+## Matrice matérielle
+
+Cibles prévues par la spécification (programmers DDR4/DDR5 via peek CPUID) —
+validation **en attente de matériel** (M2.7/M3.10) :
+
+| SoC | Programmer attendu | Statut |
+|---|---|---|
+| Snapdragon 636 / 660 (SDM636/660) | `prog_ufs_firehose_sm8250_ddr_*.elf` | ⏳ non testé |
+| Snapdragon 680 (SM6225) | `prog_firehose_lite.elf` / ddr_4 | ⏳ non testé |
+| Snapdragon 845 (SDM845) | `prog_ufs_firehose_sm8250_ddr_4.elf` | ⏳ non testé |
+| Snapdragon 855 (SM8150) | `prog_ufs_firehose_sm8250_ddr_5.elf` | ⏳ non testé |
+| Snapdragon 860 / 870 (SM6125/SM8250) | `prog_ufs_firehose_sm8250_ddr_4/5.elf` | ⏳ non testé |
+| Autres SoC Qualcomm 9008 | `prog_firehose_lite.elf` (repli) | ⏳ non testé |
+
+Chaque flash réussi sur un appareil réel est le bienvenu : ouvrez une issue
+avec le modèle exact, le contenu de `miflash doctor`, le log
+`~/.local/state/miflash/log/…/pass/` et le programmer utilisé, afin
+d'alimenter cette matrice.
+
+## Dépannage
+
+| Symptôme | Piste |
+|---|---|
+| `error: only nop and sig tag…` | auth NoAuth non déclenchée → vérifier `StaticBlobAuthenticator` (taille 256 o annoncée via `AUTHP`) |
+| Pas de ACK après `<configure>` | payload trop grand (NAK 16384) → déjà géré comme `Comm.GetResponse` l. 374 |
+| HELLO jamais reçu | port 9008 non ouvert (permissions udev) ou interface non claimée → `miflash doctor` |
+| `no EDL device found` | règles udev non rechargées / câble de données requis / appareil pas en mode 9008 (Vol- + câble) |
+| Mauvais programmer | fichier ne matchant pas `prog_.*_firehose_.*.elf` / DDR choisi → `--programmer` explicite |
+| `fastboot` introuvable | installer `android-tools` (paquet distribution) |
+| Flash fastboot interrompu | timeout global 11 min 40 s — vérifier câble/port USB, relancer |
+
 ## Démarrage rapide (développeur)
 
 ```bash
@@ -105,9 +190,38 @@ or Qualcomm. You are solely responsible for what you flash. Firehose loaders
 
 ### Status
 
-See the table above (M0→M4 done → M6 planned). Details in
-[`spec-linux.md`](spec-linux.md), [`plan.md`](plan.md), [`todo.md`](todo.md)
-(French).
+See the table above (M0→M6 done). Details in [`spec-linux.md`](spec-linux.md),
+[`plan.md`](plan.md), [`todo.md`](todo.md) (French).
+
+### Installation (v1.0.0+)
+
+Each release ships tarballs, `.deb` and `.rpm` packages (x86_64/aarch64) and
+`SHA256SUMS`.
+
+```bash
+# Debian/Ubuntu
+sudo apt install ./miflash-linux_1.0.0_amd64.deb
+# Fedora/RHEL/openSUSE
+sudo dnf install ./miflash-linux-1.0.0.x86_64.rpm
+# Arch (AUR, builds from the git tag)
+yay -S miflash-linux
+# any distro (tarball)
+tar -xzf miflash-linux-x64.tar.gz
+```
+
+Packages install the self-contained app to `/usr/lib/miflash-linux` with a
+`/usr/bin/miflash` symlink, drop the udev rules
+(`/usr/lib/udev/rules.d/51-miflash.rules`) and reload udev automatically.
+No runtime dependency (.NET 8 embedded); `fastboot` (`android-tools`)
+remains optional for `miflash flash-fastboot`. Check everything with
+`miflash doctor`.
+
+### Hardware matrix
+
+Targets from the spec (DDR4/DDR5 programmers via CPUID peek) — hardware
+validation **pending** (M2.7/M3.10). Please report successful flashes
+(open an issue with device model, `miflash doctor` output and per-device log)
+to feed the matrix in the French section above.
 
 ### CLI usage (M4)
 

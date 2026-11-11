@@ -777,7 +777,9 @@ public sealed class EdlFlasher
                 continue;
             }
             comm.CleanBuffer();
-            filename = Path.Combine(swPath, filename);
+            // M6.5 : SecurePath — un « filename » du rawprogram XML ne doit pas
+            // pouvoir échapper au répertoire d'images (traversée/absolu).
+            filename = SecurePath.Combine(swPath, filename);
             if (!File.Exists(filename))
             {
                 throw new Exception("file " + filename + " not found.");
@@ -1010,7 +1012,9 @@ public sealed class EdlFlasher
             comm.CleanBuffer();
             string addtionalFirehose = readBackVerify ? "read_back_verify=\"1\"" : "";
             DateTime now = DateTime.Now;
-            filename = Path.Combine(RestoreDirectory, filename);
+            // M6.5 : SecurePath — le « filename » du XML de restauration reste
+            // confiné au répertoire de session de sauvegarde.
+            filename = SecurePath.Combine(RestoreDirectory, filename);
             if (is_sparse)
             {
                 Log.w(comm.PortName, "nou support read sparse file " + filename);
@@ -1115,7 +1119,9 @@ public sealed class EdlFlasher
         Log.w(comm.PortName, "needFirmwarewrite: " + needFirmwarewrite);
         if (needFirmwarewrite && !string.IsNullOrEmpty(text))
         {
-            string text6 = Path.Combine(
+            // M6.5 : SecurePath — le fichier FFU (liste ffu XML) reste confiné
+            // au répertoire FFU configuré.
+            string text6 = SecurePath.Combine(
                 string.IsNullOrEmpty(FfuDirectory) ? Path.Combine(AppPaths.DataRoot, "ffu") : FfuDirectory, text);
             const string strFileStartSector = "0";
             const string text7 = "0";
