@@ -20,34 +20,40 @@ distribués ici : vous devez fournir les vôtres.
 | M3 | Moteur EDL complet (rawprogram/patch, provision, backup, multi-appareils) | ✅ fait (tag `v0.2-m3`, sauf matrice matérielle M3.10) |
 | M4 | CLI `miflash` | ✅ fait (tag `v0.3-m5`) |
 | M5 | ROM fastboot (`flash_all*`) | ✅ fait (tag `v0.3-m5` : moteur natif .bat/.sh, timeout 11 min 40 s, Intel DNX) |
-| M6 | Packaging (deb/rpm/AUR/tarball), docs, audit | ✅ fait (tag `v1.0.0`) |
+| M6 | Packaging (deb/rpm/AUR/tarball), docs, audit | ✅ fait (tag `v1.0.0` ; GUI packagé en v1.0.1) |
 
 Détails : [`spec-linux.md`](spec-linux.md) · [`plan.md`](plan.md) · [`todo.md`](todo.md).
 
-## Installation (v1.0.0+)
+## Installation (v1.0.1+)
 
-Artefacts de chaque release : tarballs `linux-x64/arm64`, paquets `.deb` et
-`.rpm` (x86_64/aarch64), `SHA256SUMS`.
+Artefacts de chaque release : tarballs `linux-x64/arm64` et `gui-x64/arm64`,
+paquets `.deb` et `.rpm` (x86_64/aarch64) — CLI **et** GUI, `SHA256SUMS`.
 
 **Debian / Ubuntu / dérivés** — téléchargez `miflash-linux_<version>_amd64.deb`
 puis :
 
 ```bash
-sudo apt install ./miflash-linux_1.0.0_amd64.deb   # installe aussi les règles udev
+sudo apt install ./miflash-linux_1.0.1_amd64.deb   # installe aussi les règles udev
 miflash doctor                                     # vérifie l'environnement
+```
+
+Pour l'interface graphique, ajoutez le paquet complémentaire :
+
+```bash
+sudo apt install ./miflash-linux-gui_1.0.1_amd64.deb   # GUI Avalonia (miflash-gui)
 ```
 
 **Fedora / RHEL / openSUSE** — `miflash-linux-<version>.x86_64.rpm` :
 
 ```bash
-sudo dnf install ./miflash-linux-1.0.0.x86_64.rpm
+sudo dnf install ./miflash-linux-1.0.1.x86_64.rpm ./miflash-linux-gui-1.0.1.x86_64.rpm
 ```
 
-**Arch Linux (AUR)** — le [`PKGBUILD`](packaging/aur/PKGBUILD) construit
-depuis le tag git :
+**Arch Linux (AUR)** — le [`PKGBUILD`](packaging/aur/PKGBUILD) (paquet scindé)
+construit depuis le tag git :
 
 ```bash
-yay -S miflash-linux        # ou : git clone aur@aur.archlinux.org:miflash-linux.git
+yay -S miflash-linux miflash-linux-gui   # ou : git clone aur@aur.archlinux.org:miflash-linux.git
 ```
 
 **Tarball (toute distribution)** :
@@ -57,14 +63,17 @@ tar -xzf miflash-linux-x64.tar.gz && cd miflash-linux-x64
 sudo cp packaging/udev/51-miflash.rules /usr/lib/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo ln -s "$PWD/miflash" /usr/local/bin/miflash
+# GUI : tar -xzf miflash-gui-x64.tar.gz (même schéma, binaire miflash-gui)
 ```
 
 Les paquets installent l'application self-contained dans `/usr/lib/miflash-linux`
 avec un lien `/usr/bin/miflash`, les règles udev
 (`/usr/lib/udev/rules.d/51-miflash.rules`), puis rechargent udev
-automatiquement (postinstall). Aucune dépendance runtime n'est requise
-(.NET 8 embarqué) ; `fastboot` (paquet `android-tools`) reste optionnel pour
-`miflash flash-fastboot`.
+automatiquement (postinstall). Le paquet GUI (`miflash-linux-gui`) ajoute
+`/usr/lib/miflash-linux-gui` + `/usr/bin/miflash-gui`, l'entrée `.desktop`
+et l'icône — il **dépend** du paquet CLI (udev, docs). Aucune dépendance
+runtime n'est requise (.NET 8 embarqué) ; `fastboot` (paquet `android-tools`)
+reste optionnel pour `miflash flash-fastboot`.
 
 ### Prérequis
 
@@ -83,6 +92,8 @@ répertoires XDG, runtime).
 Guide pas-à-pas pour POCO F3 (alioth) en EDL : **[`docs/GUIDE-POCO-F3-EDL.md`](docs/GUIDE-POCO-F3-EDL.md)**
 (préparation du répertoire ROM + programmer, entrée en mode 9008, commande,
 logs, plan B fastboot, dépannage).
+
+Guide de l'interface graphique : **[`docs/GUIDE-GUI.md`](docs/GUIDE-GUI.md)**.
 
 ## Utilisation du CLI (M4)
 
@@ -172,29 +183,30 @@ La CI (GitHub Actions, `ubuntu-latest`) build + teste chaque push : voir
 `.github/workflows/ci.yml`. Les tags `v*` déclenchent la release avec tarballs
 self-contained linux-x64/arm64 + `SHA256SUMS` : `.github/workflows/release.yml`.
 
-## GUI Avalonia (branche `feature/gui-avalonia`)
+## GUI Avalonia (`miflash-gui`)
 
-Un GUI graphique `miflash-gui` (Avalonia 11, Fluent) est en cours
-d'intégration sur la branche [`feature/gui-avalonia`](https://github.com/rakmahefa/MiFlash_CSharp_Native_NoAuth/tree/feature/gui-avalonia) :
+Interface graphique (Avalonia 11, Fluent) — **même moteur que le CLI**
+(`MultiDeviceFlasher` M3.9, `FastbootFlasher` M5) :
 
 - **liste des appareils** EDL 9008 + fastboot, surveillance hotplug
   (option « Surveiller »), progression par appareil ;
 - **sélection du répertoire ROM** (parcourir) + choix du programmer
   (auto/lite/ddr4/ddr5) ;
 - opérations **Flash EDL, Flash fastboot (all / except-storage), Backup,
-  Reboot, doctor** — exactement les mêmes moteurs que le CLI
-  (`MultiDeviceFlasher` M3.9, `FastbootFlasher` M5) ;
-- confirmation destructive (équivalent `--yes`), journal de session et logs
-  XDG réutilisés du CLI.
+  Reboot, doctor** — confirmation destructive (équivalent `--yes`), journal
+  de session et logs XDG réutilisés du CLI.
+
+Installée par le paquet `miflash-linux-gui` (voir § Installation), lancée
+par `miflash-gui` ou l'entrée de menu « MiFlash ». Guide complet :
+**[`docs/GUIDE-GUI.md`](docs/GUIDE-GUI.md)**.
 
 ```bash
 cd miflash-linux
-dotnet run --project src/MiFlash.Gui    # SDK .NET 8 requis (GTK ou X11)
+dotnet run --project src/MiFlash.Gui    # depuis les sources (SDK .NET 8)
 ```
 
 MVVM sans toolkit externe : les ViewModels ne dépendent pas d'Avalonia
-(16 tests headless). Reste à faire avant fusion : packaging GUI
-(tarball/deb), puis tag `v0.4`.
+(16 tests headless).
 
 ## Structure du dépôt
 
@@ -223,28 +235,33 @@ or Qualcomm. You are solely responsible for what you flash. Firehose loaders
 See the table above (M0→M6 done). Details in [`spec-linux.md`](spec-linux.md),
 [`plan.md`](plan.md), [`todo.md`](todo.md) (French).
 
-### Installation (v1.0.0+)
+### Installation (v1.0.1+)
 
-Each release ships tarballs, `.deb` and `.rpm` packages (x86_64/aarch64) and
-`SHA256SUMS`.
+Each release ships tarballs, `.deb` and `.rpm` packages (x86_64/aarch64) —
+CLI **and** GUI — plus `SHA256SUMS`.
 
 ```bash
 # Debian/Ubuntu
-sudo apt install ./miflash-linux_1.0.0_amd64.deb
+sudo apt install ./miflash-linux_1.0.1_amd64.deb
+sudo apt install ./miflash-linux-gui_1.0.1_amd64.deb   # optional GUI
 # Fedora/RHEL/openSUSE
-sudo dnf install ./miflash-linux-1.0.0.x86_64.rpm
-# Arch (AUR, builds from the git tag)
-yay -S miflash-linux
+sudo dnf install ./miflash-linux-1.0.1.x86_64.rpm ./miflash-linux-gui-1.0.1.x86_64.rpm
+# Arch (AUR, split package, builds from the git tag)
+yay -S miflash-linux miflash-linux-gui
 # any distro (tarball)
-tar -xzf miflash-linux-x64.tar.gz
+tar -xzf miflash-linux-x64.tar.gz   # GUI: miflash-gui-x64.tar.gz
 ```
 
 Packages install the self-contained app to `/usr/lib/miflash-linux` with a
 `/usr/bin/miflash` symlink, drop the udev rules
 (`/usr/lib/udev/rules.d/51-miflash.rules`) and reload udev automatically.
-No runtime dependency (.NET 8 embedded); `fastboot` (`android-tools`)
-remains optional for `miflash flash-fastboot`. Check everything with
-`miflash doctor`.
+The GUI package (`miflash-linux-gui`) adds `/usr/lib/miflash-linux-gui` +
+`/usr/bin/miflash-gui`, the `.desktop` entry and icon — it **depends** on the
+CLI package (udev, docs). No runtime dependency (.NET 8 embedded);
+`fastboot` (`android-tools`) remains optional for `miflash flash-fastboot`.
+Check everything with `miflash doctor`.
+
+GUI guide: **[`docs/GUIDE-GUI.md`](docs/GUIDE-GUI.md)** (French).
 
 ### Hardware matrix
 

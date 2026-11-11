@@ -40,9 +40,17 @@ jobs:
           -c Release -r linux-x64 --self-contained false
           -o artifacts/miflash-linux
 
+      - name: Publish GUI (linux-x64)
+        run: >
+          dotnet publish miflash-linux/src/MiFlash.Gui
+          -c Release -r linux-x64 --self-contained false
+          -o artifacts/miflash-gui
+
       - name: Upload artefact
         uses: actions/upload-artifact@v4
         with:
           name: miflash-linux-${{ github.sha }}
-          path: artifacts/miflash-linux
+          path: |
+            artifacts/miflash-linux
+            artifacts/miflash-gui
           if-no-files-found: error

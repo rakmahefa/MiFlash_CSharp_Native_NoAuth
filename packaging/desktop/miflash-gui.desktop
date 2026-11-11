@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=MiFlash
+GenericName=Flash tool
+GenericName[fr]=Outil de flash
+GenericName[zh]=刷机工具
+Comment=Xiaomi flashing tool — EDL (Qualcomm 9008) and fastboot
+Comment[fr]=Outil de flash Xiaomi — EDL (Qualcomm 9008) et fastboot
+Comment[zh]=小米刷机工具 — EDL（高通 9008）与 fastboot
+Exec=miflash-gui
+TryExec=miflash-gui
+Icon=miflash-gui
+Terminal=false
+Categories=System;Utility;
+Keywords=flash;xiaomi;edl;9008;fastboot;android;qualcomm;poco;mi;
+StartupWMClass=miflash-gui
+SingleMainWindow=true

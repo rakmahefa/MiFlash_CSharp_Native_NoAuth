@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- MiFlash Linux — icône du GUI (miflash-gui). Badge carré arrondi
+     orange Xiaomi, éclair blanc (flash) sur silhouette de téléphone.
+     Vectorielle : une seule ressource pour hicolor/scalable/apps. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FF8A00"/>
+      <stop offset="1" stop-color="#F0520A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Badge arrondi -->
+  <rect x="6" y="6" width="116" height="116" rx="26" fill="url(#bg)"/>
+
+  <!-- Téléphone (contour) -->
+  <rect x="40" y="22" width="48" height="84" rx="9"
+        fill="none" stroke="#FFFFFF" stroke-width="5" opacity="0.92"/>
+  <line x1="55" y1="30" x2="73" y2="30" stroke="#FFFFFF" stroke-width="4"
+        stroke-linecap="round" opacity="0.92"/>
+
+  <!-- Éclair (flash) -->
+  <path d="M 71 38 L 49 72 L 61 72 L 55 94 L 79 58 L 66 58 Z"
+        fill="#FFFFFF" stroke="#F0520A" stroke-width="1.5"
+        stroke-linejoin="round"/>
+</svg>
