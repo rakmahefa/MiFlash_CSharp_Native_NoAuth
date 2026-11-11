@@ -51,7 +51,7 @@ Le flux complet observé dans `SerialPortDevice.XiaomiFlashNew()` (l. 117–235)
 1. Ouverture du port 9008 (`new SerialPort(deviceName, 9600)` — le baudrate est ignoré en pratique, le port est un bulk USB) ;
 2. `SaharaDownloadProgrammer()` : lecture `SAHARA HELLO` (48 o, version 2/1, mode 3), réponse `HELLO RESPONSE`, puis boucle `READ DATA` → envoi du fichier `prog_*_firehose_*.elf` par blocs, jusqu'à `DONE` ;
 3. `ConfigureDDR()` : commande XML `<configure>` (sector 4096 UFS / 512 eMMC, `MaxPayloadSizeToTargetInBytes` = 1 Mo, `SkipStorageInit`) ;
-4. **Auth NoAuth** : si NAK `« error: only nop and sig tag can be received before authentication »` → `dlAuth()` renvoie un **blob statique de 319 octets** (hardcodé l. 678) via `AUTHP`/`AUTH` — c'est le cœur du bypass, 100 % protocole donc portable ;
+4. **Auth NoAuth** : si NAK `« error: only nop and sig tag can be received before authentication »` → `dlAuth()` renvoie un **blob statique de 256 octets** (hardcodé l. 678 — erratum v0.2 : l'analyse initiale annonçait 319, vérification programmatique : 256) via `AUTHP`/`AUTH` — c'est le cœur du bypass, 100 % protocole donc portable ;
 5. `peek` CPUID → sélection DDR4 (`0xC3 0x00 0x40/0x31/0x02 0x10`) ou DDR5 (`0x00/0x51/0x32 0x10`) → `prog_ufs_firehose_sm8250_ddr_4/5.elf` ;
 6. `BackupRom()` (rawprogram_backup.xml) puis `Provision()` (provision*.xml, SkipStorageInit=1, re-reset EDL) ;
 7. `FirehoseDownloadImg()` : parsing `rawprogram[0-9]{1,20}.xml` → `<program>` par secteur, gestion des images **sparse** (`parsingheader`, `CekSparse`) et des fichiers `.mbn/.img/.elf` bruts via `FileTransfer` ;
@@ -69,7 +69,7 @@ Flux fastboot (`ScriptDevice.fastbootflash()`) : exécution de `flash_all*.bat`
   `StartLoginProcess`, `get_user_info`, `SLA_Challenge(Ex)`, `can_flash`… Utilisé par
   le MiFlash officiel ; **non requis** dans la variante NoAuth (blob statique).
 - Le port Linux remplace cela par une interface `IEdlAuthenticator` avec, pour v1,
-  l'implémentation « StaticBlobAuthenticator » (le blob 319 o du code actuel).
+  l'implémentation « StaticBlobAuthenticator » (le blob 256 o du code actuel — erratum : 319 annoncé initialement, 256 vérifié).
 
 ---
 
@@ -136,7 +136,7 @@ miflash-linux/                     (solution .NET 8, C# 12)
 - **D1 — CLI d'abord.** Le cœur de valeur est EDL ; la GUI WinForms n'est pas portable et n'apporte rien au flux usine/repair. La GUI Avalonia viendra en dernier.
 - **D2 — libusb prioritaire sur qcserial.** Le 9008 est une interface bulk ; passer par le noyau (qcserial → /dev/ttyUSB*) reste possible mais dépend du module. L'approche libusb (identique à `bkerler/edl`) garantit le contrôle des ZLP et timeouts.
 - **D3 — Protocole inchangé.** Aucune réécriture du protocole : on conserve les paquets, timeouts et séquences observés (y compris le handshake « switch mode back » de récupération, `SaharaDownloadProgrammer` l. 390–444).
-- **D4 — Auth en interface.** Le blob statique 319 o est l'implémentation par défaut ; un futur signer (PKCS#11, fichier d'octets, service externe) se branchera sans toucher au moteur.
+- **D4 — Auth en interface.** Le blob statique 256 o (erratum v0.2 : 319 → 256 vérifié programmatiquement) est l'implémentation par défaut ; un futur signer (PKCS#11, fichier d'octets, service externe) se branchera sans toucher au moteur.
 - **D5 — Fastboot par processus en v1** (le `fastboot` du système), natif C# en v2 ; le parsing des scripts `flash_all*` devient indépendant de l'OS.
 
 ---

@@ -38,7 +38,7 @@
 - Porter `FileTransfer.cs` (program/patch par secteurs, sparse, FFU, chunk ACK).
 - Encoder en UTF-8 explicite ; remplacer `AppDomain…ApplicationBase` par `IAppPaths` (XDG).
 - **Tests unitaires** : paquets golden (HELLO 48 o, READ DATA 64 bits), fixtures
-  `rawprogram/patch/provision` XML, images sparse de test, blob auth 319 o.
+  `rawprogram/patch/provision` XML, images sparse de test, blob auth 256 o.
 
 ### M2 — Transport USB libusb (≈ 4 j)
 

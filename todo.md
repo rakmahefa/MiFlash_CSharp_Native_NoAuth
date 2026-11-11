@@ -7,26 +7,26 @@
 
 - [x] A0.1 Analyse complète du code source (120 fichiers C#, ~14 350 lignes) — commit base `5450f4f`
 - [x] A0.2 Inventaire des dépendances Windows (P/Invoke ×80+, WMI, Registry, setupapi, cmd.exe, MiUSB.dll, SLA_Challenge.dll…) → spec §3
-- [x] A0.3 Identification du flux EDL complet (Sahara → Firehose → auth NoAuth blob 319 o → rawprogram/patch) → spec §2.2
+- [x] A0.3 Identification du flux EDL complet (Sahara → Firehose → auth NoAuth blob 256 o → rawprogram/patch) → spec §2.2
 - [x] A0.4 Création de la branche `dev` + rédaction `spec-linux.md`, `plan.md`, `todo.md`
 
 ## M0 — Hygiène du dépôt & socle build
 
-- [ ] M0.1 Écrire `.gitignore` (bin/, obj/, *.user, *.suo, log/, *.pdb) et supprimer `src/bin` (59 Mo), `src/obj`, `*.csproj.user` du dépôt
-- [ ] M0.2 Conserver : sources C de `ThirdParty/Qualcomm/fh_loader/QSaharaServer` (référence), `.inf` (doc), `LanguageLibrary.xml`
-- [ ] M0.3 Créer la solution .NET 8 multi-projets : `MiFlash.Core`, `MiFlash.Edl`, `MiFlash.Transport.Usb`, `MiFlash.Transport.Serial`, `MiFlash.Fastboot`, `MiFlash.Cli`
-- [ ] M0.4 CI GitHub Actions (ubuntu-latest) : `dotnet build` + `dotnet test` + `dotnet format --verify-no-changes`
-- [ ] M0.5 README-linux (fr/en) : usage éducatif, avertissement, prérequis
+- [x] M0.1 Écrire `.gitignore` (bin/, obj/, *.user, *.suo, log/, *.pdb) et supprimer `src/bin` (59 Mo), `src/obj`, `*.csproj.user` du dépôt — commit `0f5c9e9`
+- [x] M0.2 Conserver : sources C de `ThirdParty/Qualcomm/fh_loader/QSaharaServer` (référence), `.inf` (doc), `LanguageLibrary.xml` — extraits vers `reference/` (commit `0f5c9e9`)
+- [x] M0.3 Créer la solution .NET 8 multi-projets : `MiFlash.Core`, `MiFlash.Edl`, `MiFlash.Transport.Usb`, `MiFlash.Transport.Serial`, `MiFlash.Fastboot`, `MiFlash.Cli` — commit `36f046d` (LibUsbDotNet 3.0.224, System.IO.Ports 9.0.0, Directory.Build.props, 3 tests fumée)
+- [x] M0.4 CI GitHub Actions (ubuntu-latest) : `dotnet build` + `dotnet test` + `dotnet format --verify-no-changes` + artefact publish linux-x64 — commit `cc44780` (`.github/workflows/ci.yml`)
+- [x] M0.5 README-linux (fr/en) : usage éducatif, avertissement, prérequis — commit `cc44780` (+ `miflash-linux/README.md` guide dev, `.editorconfig`)
 
 ## M1 — MiFlash.Core (protocoles, OS-agnostique)
 
-- [ ] M1.1 Porter `XiaoMiFlash.code.module/**` (paquets Sahara, commandes Firehose XML, `CommandFormat`, `SoftwareImage`, `Sparse*`, `FlashType`, `Storage`, `UserInfo`, `FlashResult`) — supprimer les références WinForms/Win32
-- [ ] M1.2 Définir `ITransport` (Open/Read/Write/Close/DiscardBuffers/IsOpen/PortName) et `IEdlAuthenticator`
-- [ ] M1.3 Porter `Comm.cs` sur `ITransport` : ACK/NAK (`chkRspAck` simple + chunkCount), `GetResponse`/`GetResponseXml`, détection DDR4/DDR5 (peek `0xC3 0x00 …`), chip serial, `needEdlAuth`
-- [ ] M1.4 Porter `FileTransfer.cs` : `WriteFile`/`ReadFile`/`WriteSparseFileToDevice`/`WriteFfuFile`/`SetBytesToFile`, chunk ACK
-- [ ] M1.5 Remplacer `Encoding.Default` par UTF-8 explicite (audit : `Comm.SendCommand`, dumps)
-- [ ] M1.6 `AppPaths` XDG (`~/.local/share|state/miflash/`) remplaçant `AppDomain…ApplicationBase + "Source\\…"`
-- [ ] M1.7 Tests unitaires : golden packets (HELLO 48 o, HELLO_RESPONSE v2/mode 3, READ DATA 32/64 bits), fixtures `rawprogram/patch/provision` XML, image sparse de test, blob auth 319 o, patterns `SoftwareImage`
+- [x] M1.1 Porter `XiaoMiFlash.code.module/**` : paquets Sahara (`Sahara/SaharaPackets.cs`), commandes Firehose XML (`Firehose/FirehoseCommands.cs`), `CommandFormat` (`Protocol/`), `SoftwareImage`, `Sparse*`, `FlashType`, `Storage`, modèles (`Models/`) — écarts documentés : `Device.cs` (→ M3, session), `Script.cs` (→ AppPaths M1.6), `CommandPacket`/`StreamingArg`/`HelloCommand`/`StreamWrite*`/`OpenMultiImage*`/`Simple*`/`SecurityMode*`/`MiProperty`/`UserInfo` orphelins ou usine (hors périmètre v1)
+- [x] M1.2 Définir `ITransport` (Open/Read/Write/Close/DiscardBuffers/IsOpen/PortName) et `IEdlAuthenticator` (+ `StaticBlobAuthenticator` : blob 256 o extrait programmatiquement de `dlAuth()`, SHA-256 golden `de84d23c…e739`)
+- [x] M1.3 Porter `Comm.cs` sur `ITransport` : ACK/NAK (`chkRspAck` simple + chunkCount), `GetResponse`/`GetResponseXml`, détection DDR4/DDR5 (peek `0xC3 0x00 …`), chip serial, `needEdlAuth` — `Protocol/Comm.cs`
+- [x] M1.4 Porter `FileTransfer.cs` : `WriteFile`/`ReadFile`/`WriteSparseFileToDevice`/`WriteFfuFile`/`SetBytesToFile` (+ quick transfer `MemImg`), chunk ACK — `Transfer/FileTransfer.cs` (paramètre `Comm` au lieu de `SerialPortDevice`)
+- [x] M1.5 Remplacer `Encoding.Default` par UTF-8 explicite (audit : `Comm.SendCommand`) + abstractions `Log`/`FlashStatus` remplaçant `Log.cs`/`FlashingDevice` (UI-dépendants)
+- [x] M1.6 `AppPaths` XDG (`~/.local/share|state/miflash/`) remplaçant `AppDomain…ApplicationBase + "Source\\…"` — `Io/AppPaths.cs` (évalué à chaque accès, testable)
+- [x] M1.7 Tests unitaires : 64 tests verts — golden packets (HELLO 48 o, HELLO_RESPONSE v2/mode 3, READ DATA 32/64 bits), gabarits Firehose (configure/program/patch/auth), image sparse construite en test (RAW/FILL/DONTCARE), blob auth 256 o (SHA-256 + clone défensif), patterns `SoftwareImage`, comportements `Comm` via `FakeTransport` (ACK groupés, DDR4/5, chip serial, NAK 16384), XDG
 - [ ] M1.8 Tag `v0.1-m1` si CI verte
 
 ## M2 — Transport USB (libusb) + détection
@@ -42,7 +42,7 @@
 ## M3 — Moteur EDL complet
 
 - [ ] M3.1 Porter `SaharaDownloadProgrammer` (avec boucle de récupération « switch mode back » l. 390–444) en `async`
-- [ ] M3.2 `ConfigureDDR` + gestion `needEdlAuth` → `StaticBlobAuthenticator` (blob 319 o de `dlAuth()`)
+- [ ] M3.2 `ConfigureDDR` + gestion `needEdlAuth` → `StaticBlobAuthenticator` (blob 256 o de `dlAuth()`)
 - [ ] M3.3 Peek CPUID → sélection programmer lite/DDR4/DDR5 (`prog_firehose_lite.elf`, `prog_ufs_firehose_sm8250_ddr_4/5.elf`) + détection UFS/eMMC
 - [ ] M3.4 `BackupRom` / restore (`rawprogram_backup/restore.xml`) + `NeedBackupRom/NeedRestoreRom/NeedProvision/NeedDifferentiateDdr`
 - [ ] M3.5 `Provision` (SkipStorageInit=1, partial_reset ou reset_to_edl + re-Sahara)
@@ -90,7 +90,7 @@
 
 | Symptôme | Piste |
 |---|---|
-| `error: only nop and sig tag…` | Auth NoAuth non déclenchée → vérifier `StaticBlobAuthenticator` (taille 319 o annoncée via `AUTHP`) |
+| `error: only nop and sig tag…` | Auth NoAuth non déclenchée → vérifier `StaticBlobAuthenticator` (taille 256 o annoncée via `AUTHP`) |
 | Pas de ACK après `<configure>` | Payload trop grand pour le loader (NAK 16384) → gérer comme `Comm.GetResponse` l. 374 |
 | HELLO jamais reçu | Port 9008 non ouvert (permissions udev) ou interface non claimée → `miflash doctor` |
 | Mauvais programmer | Fichier ne matchant pas `prog_.*_firehose_.*.elf` / DDR choisi → `--programmer` explicite |

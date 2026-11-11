@@ -2,9 +2,11 @@ namespace MiFlash.Core;
 
 /// <summary>
 /// Cœur protocole du portage Linux de MiFlash — point d'entrée statique.
-/// Contenu réel apporté par le jalon M1 (todo.md) : paquets Sahara,
-/// commandes Firehose XML, formats d'images (sparse, rawprogram/patch),
-/// <c>ITransport</c> et <c>IEdlAuthenticator</c>.
+/// Jalon M1 : paquets Sahara (<see cref="Sahara"/>), commandes Firehose XML
+/// (<see cref="Firehose"/>), formats d'images (<see cref="Images"/>),
+/// <see cref="Transport.ITransport"/>, <see cref="Auth.IEdlAuthenticator"/>
+/// (blob NoAuth statique), <see cref="Protocol.Comm"/> et
+/// <see cref="Transfer.FileTransfer"/>.
 /// </summary>
 public static class MiFlashCore
 {

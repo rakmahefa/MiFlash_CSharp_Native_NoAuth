@@ -8,6 +8,6 @@ namespace MiFlash.Edl;
 /// </summary>
 public static class EdlEngine
 {
-    /// <summary>Taille du blob d'authentification NoAuth observée dans dlAuth() (319 octets).</summary>
-    public const int StaticAuthBlobLength = 319;
+    /// <summary>Taille du blob d'authentification NoAuth observée dans dlAuth() (256 octets).</summary>
+    public const int StaticAuthBlobLength = 256;
 }

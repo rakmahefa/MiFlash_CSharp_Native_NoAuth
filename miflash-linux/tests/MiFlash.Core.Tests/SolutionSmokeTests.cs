@@ -26,6 +26,7 @@ public class SolutionSmokeTests
         // Garde-fous de fidélité du portage : valeurs tirées du code Windows analysé.
         Assert.Equal(0x05C6, MiFlash.Transport.Usb.UsbTransportModule.EdlVendorId);
         Assert.Equal(0x9008, MiFlash.Transport.Usb.UsbTransportModule.EdlProductId);
-        Assert.Equal(319, MiFlash.Edl.EdlEngine.StaticAuthBlobLength);
+        Assert.Equal(256, MiFlash.Edl.EdlEngine.StaticAuthBlobLength);
+        Assert.Equal(256, MiFlash.Core.Auth.StaticBlobAuthenticator.AuthBlob.Length);
     }
 }
